@@ -571,7 +571,7 @@ async function processWhisperFile(file){
   showToast('ok','🤖 Whisper APIで文字起こし中…');
   try{
     const fd=new FormData();fd.append('file',file,file.name);fd.append('model','whisper-1');fd.append('language','ja');fd.append('response_format','verbose_json');fd.append('timestamp_granularities[]','segment');
-    const res=await fetch('https://api.openai.com/v1/audio/transcriptions',{method:'POST',headers:{'Authorization':'Bearer '+apiKey},body:fd});
+    const res=await fetch('https://voiceminutes-proxy.cryk0289.workers.dev/whisper',{method:'POST',headers:{'Authorization':'Bearer '+apiKey,'X-OpenAI-Key':apiKey},body:fd});
     if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||'HTTP '+res.status);}
     const data=await res.json();
     if(data.segments&&data.segments.length>0){
@@ -607,7 +607,7 @@ async function runAI(){
   const btn=document.getElementById('btnAI');btn.disabled=true;btn.innerHTML='<div class="spinner"></div> 分析中…';
   const sb=document.getElementById('summaryBody');sb.innerHTML='<div class="empty-state"><div class="empty-icon" style="animation:spin 1s linear infinite;display:inline-block">⚙️</div><div class="empty-text" style="margin-top:10px">Claude AIが分析しています…</div></div>';
   try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-calls':'true'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,system:SCENE_PROMPTS[currentScene],messages:[{role:'user',content:'以下の文字起こしテキストを整理してください。\n\n'+text}]})});
+    const res=await fetch('https://voiceminutes-proxy.cryk0289.workers.dev/claude',{method:'POST',headers:{'Content-Type':'application/json','X-Anthropic-Key':apiKey},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,system:SCENE_PROMPTS[currentScene],messages:[{role:'user',content:'以下の文字起こしテキストを整理してください。\n\n'+text}]})});
     if(!res.ok){const err=await res.json();throw new Error(err.error?.message||'APIエラー');}
     const data=await res.json(),raw=data.content[0]?.text||'',m=raw.match(/\{[\s\S]*\}/);
     const result=JSON.parse(m?m[0]:raw);
