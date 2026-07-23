@@ -333,6 +333,51 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; } ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
 
+  /* ── 円グラフカウントダウン ── */
+  .whisper-countdown {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 10px; padding: 12px 0;
+  }
+  .countdown-ring-wrap {
+    position: relative; width: 100px; height: 100px;
+  }
+  .countdown-ring {
+    transform: rotate(-90deg);
+    width: 100px; height: 100px;
+  }
+  .countdown-ring-bg {
+    fill: none; stroke: var(--border); stroke-width: 8;
+  }
+  .countdown-ring-bar {
+    fill: none; stroke: var(--accent); stroke-width: 8;
+    stroke-linecap: round;
+    stroke-dasharray: 283;
+    stroke-dashoffset: 0;
+    transition: stroke-dashoffset 1s linear;
+  }
+  .countdown-ring-bar.finishing { stroke: var(--red); }
+  .countdown-center {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-family: 'DM Mono', monospace;
+  }
+  .countdown-sec {
+    font-size: 22px; font-weight: 700; color: var(--text);
+    line-height: 1;
+  }
+  .countdown-label {
+    font-size: 9px; color: var(--text3); font-weight: 600;
+    letter-spacing: 0.5px; margin-top: 2px;
+  }
+  .countdown-filename {
+    font-size: 11px; color: var(--text2); text-align: center;
+    max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .countdown-status {
+    font-size: 11px; color: var(--accent2); font-weight: 600;
+  }
+
 </style>
 
 
@@ -566,7 +611,66 @@ async function processWhisperFile(file){
   if(file.size>25*1024*1024){showToast('err','⚠ 25MBを超えています（Whisperの上限）');return;}
   const zone=document.getElementById('whisperDropZone');
   zone.classList.add('processing');
-  zone.innerHTML='<span class="file-drop-icon">🤖</span><span class="file-drop-text">「'+file.name+'」をWhisperで文字起こし中…</span><div class="file-progress"><div class="file-progress-bar" style="width:40%"></div></div>';
+
+  // 音声ファイルの長さを取得して処理時間を推定
+  let estimatedSec = 30; // デフォルト30秒
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const arrayBuf = await file.arrayBuffer();
+    const audioBuf = await audioCtx.decodeAudioData(arrayBuf);
+    const durationMin = audioBuf.duration / 60;
+    // 1分の音声 → 約8秒で処理（Whisperの実績ベース）
+    estimatedSec = Math.max(10, Math.round(durationMin * 8));
+    audioCtx.close();
+  } catch(e) {
+    // 取得できない場合はデフォルト値
+  }
+
+  // 円グラフカウントダウンUI
+  zone.innerHTML =
+    '<div class="whisper-countdown">' +
+    '<div class="countdown-ring-wrap">' +
+    '<svg class="countdown-ring" viewBox="0 0 100 100">' +
+    '<circle class="countdown-ring-bg" cx="50" cy="50" r="45"/>' +
+    '<circle class="countdown-ring-bar" id="countdownBar" cx="50" cy="50" r="45"/>' +
+    '</svg>' +
+    '<div class="countdown-center">' +
+    '<div class="countdown-sec" id="countdownSec">' + estimatedSec + '</div>' +
+    '<div class="countdown-label">秒</div>' +
+    '</div></div>' +
+    '<div class="countdown-filename">🎵 ' + file.name + '</div>' +
+    '<div class="countdown-status" id="countdownStatus">Whisperで文字起こし中…</div>' +
+    '</div>';
+
+  // カウントダウン開始
+  const circumference = 2 * Math.PI * 45; // ≈ 282.7
+  const bar = document.getElementById('countdownBar');
+  const secEl = document.getElementById('countdownSec');
+  const statusEl = document.getElementById('countdownStatus');
+  let remaining = estimatedSec;
+  if (bar) bar.style.strokeDasharray = circumference;
+
+  const countdownInt = setInterval(() => {
+    remaining--;
+    const progress = remaining / estimatedSec;
+    const offset = circumference * (1 - progress);
+    if (bar) {
+      bar.style.strokeDashoffset = offset;
+      if (remaining <= 5) bar.classList.add('finishing');
+    }
+    if (secEl) {
+      if (remaining > 0) {
+        secEl.textContent = remaining;
+      } else {
+        secEl.textContent = '…';
+        if (statusEl) statusEl.textContent = 'もうすぐ完了…';
+      }
+    }
+  }, 1000);
+
+  // カウントダウン停止用にインターバルIDを保存
+  zone._countdownInt = countdownInt;
+
   showToast('ok','🤖 Whisper APIで文字起こし中…');
   try{
     const fd=new FormData();fd.append('file',file,file.name);fd.append('model','whisper-1');fd.append('language','ja');fd.append('response_format','verbose_json');fd.append('timestamp_granularities[]','segment');
@@ -663,7 +767,20 @@ async function exportDocx(){
   }catch(e){showToast('err','❌ Word出力エラー: '+e.message);}
 }
 function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
-function downloadBlob(blob,filename){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},1000);}
+function downloadBlob(blob,filename){
+  try {
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=filename;
+    a.style.display='none';
+    document.body.appendChild(a);
+    a.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window}));
+    setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},2000);
+    showToast('ok','✅ ダウンロードしました：'+filename);
+  } catch(e) {
+    showToast('err','❌ ダウンロードエラー: '+e.message);
+  }
+}
 function formatFilename(d){return d.replace(/[/:]/g,'-').replace(/\s/g,'_');}
 
 function setScene(btn){document.querySelectorAll('.scene-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentScene=btn.dataset.scene;document.getElementById('sceneBadgeText').textContent=SCENE_LABELS[currentScene];}
@@ -688,16 +805,25 @@ refreshWhisperKeyStatus();
 if(!window.SpeechRecognition&&!window.webkitSpeechRecognition){setTimeout(()=>showToast('err','⚠ このブラウザはリアルタイム文字起こしに非対応です。Chrome / Edge をお使いください'),800);}
 
 // Whisperファイル入力の初期バインド
-(function(){
+function bindWhisperZone(){
   const inp=document.getElementById('whisperFileInput');
-  if(inp){inp.addEventListener('change',function(e){const f=e.target.files[0];if(f)processWhisperFile(f);e.target.value='';});}
+  if(inp){
+    inp.onchange=function(e){const f=e.target.files[0];if(f)processWhisperFile(f);e.target.value='';};
+  }
   const zone=document.getElementById('whisperDropZone');
   if(zone){
-    zone.addEventListener('dragover',function(e){e.preventDefault();zone.classList.add('drag-over');});
-    zone.addEventListener('dragleave',function(){zone.classList.remove('drag-over');});
-    zone.addEventListener('drop',function(e){e.preventDefault();zone.classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f)processWhisperFile(f);});
+    zone.ondragover=function(e){e.preventDefault();e.stopPropagation();zone.classList.add('drag-over');return false;};
+    zone.ondragleave=function(e){e.preventDefault();zone.classList.remove('drag-over');};
+    zone.ondrop=function(e){
+      e.preventDefault();e.stopPropagation();
+      zone.classList.remove('drag-over');
+      const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];
+      if(f)processWhisperFile(f);
+      return false;
+    };
   }
-})();
+}
+bindWhisperZone();
 
 
 
