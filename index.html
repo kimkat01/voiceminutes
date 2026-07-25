@@ -448,10 +448,7 @@
   <div class="center">
     <div class="recorder-area">
       <div class="section-label-bar"><span class="dot" id="recDot"></span><span>録音コントロール</span><span class="line"></span></div>
-      <div class="recorder-top">
-        <div class="scene-badge"><div class="scene-badge-dot" style="background:var(--text3)"></div><span id="sceneBadgeText">職員会議</span></div>
-        <div class="timer" id="timerDisplay">00:00</div>
-      </div>
+
       <div class="rec-controls">
         <button class="btn-rec start" id="btnStart" onclick="startRec()">● 録音開始</button>
         <button class="btn-rec stop" id="btnStop" onclick="stopRec()" disabled>■ 録音停止</button>
@@ -478,7 +475,7 @@
         </div>
       </div>
       <div class="mode-panel active" id="panelWhisper" class="mode-panel active">
-        <div class="whisper-info"><strong>OpenAI Whisper API</strong> を使って音声ファイルを高精度で文字起こしします。<br>🎉 APIキー不要ですぐに使えます！</div>
+
         <div style="display:none">
           <input type="password" class="whisper-key-input" id="whisperKeyInput">
           <button class="btn-save-whisper" onclick="saveWhisperKey()">保存</button>
