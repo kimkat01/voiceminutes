@@ -656,9 +656,99 @@ function saveWhisperKey(){const val=document.getElementById('whisperKeyInput').v
 function refreshWhisperKeyStatus(){const key=localStorage.getItem('vm_openai_key')||'',el=document.getElementById('whisperKeyStatus');if(!el)return;if(key){el.textContent='✅ APIキー設定済み（'+key.slice(0,8)+'…）';el.className='whisper-key-status ok';document.getElementById('whisperKeyInput').value=key;}else{el.textContent='❌ 未設定';el.className='whisper-key-status ng';}}
 function handleWhisperDrop(e){e.preventDefault();document.getElementById('whisperDropZone').classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f)processWhisperFile(f);}
 function handleWhisperSelect(e){const f=e.target.files[0];if(f)processWhisperFile(f);e.target.value='';}
+// ════════════════════════════════════════════
+// 音声ファイル自動圧縮（25MB超え対応）
+// ════════════════════════════════════════════
+async function compressAudio(file) {
+  // Web Audio APIで読み込み
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const arrayBuf = await file.arrayBuffer();
+  const audioBuf = await audioCtx.decodeAudioData(arrayBuf);
+  audioCtx.close();
+
+  // モノラル・16kHzにダウンサンプリング
+  const targetSampleRate = 16000;
+  const duration = audioBuf.duration;
+  const offlineCtx = new OfflineAudioContext(1, Math.ceil(duration * targetSampleRate), targetSampleRate);
+  const source = offlineCtx.createBufferSource();
+  source.buffer = audioBuf;
+  source.connect(offlineCtx.destination);
+  source.start();
+  const rendered = await offlineCtx.startRendering();
+
+  // WAV形式に変換
+  const wavBlob = audioBufferToWav(rendered);
+
+  // それでも25MBを超える場合はさらに分割（前半のみ）
+  if (wavBlob.size > 24 * 1024 * 1024) {
+    // 半分の長さで再試行
+    const halfDuration = duration / 2;
+    const offlineCtx2 = new OfflineAudioContext(1, Math.ceil(halfDuration * targetSampleRate), targetSampleRate);
+    const source2 = offlineCtx2.createBufferSource();
+    source2.buffer = audioBuf;
+    source2.connect(offlineCtx2.destination);
+    source2.start(0, 0, halfDuration);
+    const rendered2 = await offlineCtx2.startRendering();
+    const wavBlob2 = audioBufferToWav(rendered2);
+    showToast('ok', '⚠ 長時間音声のため前半' + Math.round(halfDuration/60) + '分を処理します');
+    return new File([wavBlob2], file.name.replace(/\.[^.]+$/, '_compressed.wav'), {type:'audio/wav'});
+  }
+
+  return new File([wavBlob], file.name.replace(/\.[^.]+$/, '_compressed.wav'), {type:'audio/wav'});
+}
+
+function audioBufferToWav(buffer) {
+  const numChannels = 1;
+  const sampleRate = buffer.sampleRate;
+  const format = 1; // PCM
+  const bitDepth = 16;
+  const samples = buffer.getChannelData(0);
+  const byteRate = sampleRate * numChannels * bitDepth / 8;
+  const blockAlign = numChannels * bitDepth / 8;
+  const dataSize = samples.length * blockAlign;
+  const wavBuffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(wavBuffer);
+
+  // WAVヘッダー
+  const writeStr = (offset, str) => { for(let i=0;i<str.length;i++) view.setUint8(offset+i, str.charCodeAt(i)); };
+  writeStr(0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, format, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitDepth, true);
+  writeStr(36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  // PCMデータ
+  let offset = 44;
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    offset += 2;
+  }
+
+  return new Blob([wavBuffer], {type: 'audio/wav'});
+}
+
 async function processWhisperFile(file){
   const apiKey=localStorage.getItem('vm_openai_key')||'';
-  if(file.size>25*1024*1024){showToast('err','⚠ 25MBを超えています（Whisperの上限）');return;}
+  // 25MB超えの場合は自動圧縮
+  if(file.size > 25*1024*1024){
+    showToast('ok', '⚙ ファイルが大きいため自動圧縮中… しばらくお待ちください');
+    try {
+      file = await compressAudio(file);
+      showToast('ok', '✅ 圧縮完了（' + (file.size/1024/1024).toFixed(1) + 'MB）→ 文字起こし開始');
+    } catch(compErr) {
+      showToast('err', '❌ 圧縮エラー: ' + compErr.message);
+      return;
+    }
+  }
   const zone=document.getElementById('whisperDropZone');
   zone.classList.add('processing');
 
