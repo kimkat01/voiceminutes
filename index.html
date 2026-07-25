@@ -331,6 +331,34 @@
   .toast.err { border-left: 4px solid var(--red); }
   .spinner { width: 13px; height: 13px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; animation: spin 0.7s linear infinite; flex-shrink: 0; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  /* 保存ボタン */
+  .btn-save-record {
+    display: none; width: 100%; padding: 10px;
+    background: linear-gradient(135deg, var(--green), #26c4a8);
+    border: none; border-radius: 20px; color: #fff;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 13px; font-weight: 700; cursor: pointer;
+    transition: all 0.15s; margin-top: 8px;
+    box-shadow: 0 3px 10px rgba(60,184,120,0.30);
+  }
+  .btn-save-record.visible { display: block; }
+  .btn-save-record:hover { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(60,184,120,0.40); }
+
+  /* タイトル入力モーダル */
+  .title-modal { display: none; position: fixed; inset: 0; background: rgba(30,10,60,0.45); z-index: 300; align-items: center; justify-content: center; backdrop-filter: blur(6px); }
+  .title-modal.show { display: flex; }
+  .title-modal-box { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 24px; width: 380px; max-width: 90vw; box-shadow: var(--shadow-lg); }
+  .title-modal-title { font-size: 15px; font-weight: 700; margin-bottom: 6px; color: var(--text); }
+  .title-modal-desc { font-size: 11px; color: var(--text3); margin-bottom: 14px; }
+  .title-input {
+    width: 100%; padding: 10px 14px; background: var(--surface2);
+    border: 1.5px solid var(--border2); border-radius: var(--radius-sm);
+    color: var(--text); font-family: 'Noto Sans JP', sans-serif;
+    font-size: 14px; outline: none; transition: border 0.15s; margin-bottom: 14px;
+  }
+  .title-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(138,43,226,0.10); }
+  .title-modal-btns { display: flex; gap: 10px; justify-content: flex-end; }
+
   ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; } ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
 
   /* ── 円グラフカウントダウン ── */
@@ -483,6 +511,7 @@
       <div class="empty-state"><div class="empty-icon">✨</div><div class="empty-text">文字起こし後に<br>「AI要点整理」を実行すると<br>決定事項・TODOが<br>自動でまとまります</div></div>
     </div>
     <div class="ai-run-area">
+      <button class="btn-save-record" id="btnSaveRecord" onclick="openSaveModal()">💾 この記録を保存</button>
       <button class="btn-ai" id="btnAI" onclick="runAI()">✨ AI要点整理を実行</button>
       <div class="ai-hint" id="aiHint">文字起こしが完了してから実行してください</div>
       <div class="export-row">
@@ -534,6 +563,19 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- タイトル入力モーダル -->
+<div class="title-modal" id="titleModal">
+  <div class="title-modal-box">
+    <div class="title-modal-title">💾 記録を保存</div>
+    <div class="title-modal-desc">タイトルを入力してください（空欄の場合は自動設定）</div>
+    <input type="text" class="title-input" id="titleInput" placeholder="例：職員会議 7月25日" maxlength="50">
+    <div class="title-modal-btns">
+      <button class="btn-modal cancel" onclick="closeSaveModal()">キャンセル</button>
+      <button class="btn-modal save" onclick="confirmSave()">保存</button>
+    </div>
+  </div>
+</div>
+
 <script>
 
 
@@ -567,7 +609,15 @@ function cycleSpeaker(){currentSpeakerIdx=(currentSpeakerIdx+1)%SPEAKERS.length;
 function addUtterance(text,tsOverride){const spk=SPEAKERS[currentSpeakerIdx],ts=tsOverride!==undefined?tsOverride:timerSec;utterances.push({speaker:spk.id,label:spk.label,icon:spk.icon,side:spk.side,text,ts});renderBubbles();updateCharCount();}
 function renderBubbles(){const feed=document.getElementById('bubbleFeed');if(!utterances.length){feed.innerHTML='<div class="bubble-empty">録音を開始すると<br>ここに会話が表示されます</div>';return;}feed.innerHTML=utterances.map(u=>`<div class="bubble-row ${u.side} spk-${u.speaker}"><div class="spk-icon">${u.icon}</div><div class="bubble-body"><div class="spk-name">${escHtml(u.label)}</div><div class="bubble-text">${escHtml(u.text)}</div><div class="bubble-ts">${fmtSec(u.ts)}</div></div></div>`).join('');feed.scrollTop=feed.scrollHeight;}
 function updateCharCount(){document.getElementById('charCount').textContent=utterances.length+' 発言';}
-function updateTranscriptUI(){fullTranscript=utterances.map(u=>`【${u.label}】${u.text}`).join('\n');}
+function updateTranscriptUI(){
+  fullTranscript=utterances.map(u=>'【'+u.label+'】'+u.text).join('\n');
+  // 発言があれば保存ボタンを表示
+  const btn=document.getElementById('btnSaveRecord');
+  if(btn){
+    if(utterances.length>0) btn.classList.add('visible');
+    else btn.classList.remove('visible');
+  }
+}
 
 function switchInputMode(mode,btn){document.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.mode-panel').forEach(p=>p.classList.remove('active'));btn.classList.add('active');document.getElementById('panel'+mode.charAt(0).toUpperCase()+mode.slice(1)).classList.add('active');if(mode==='whisper')refreshWhisperKeyStatus();}
 
@@ -700,7 +750,8 @@ function restoreWhisperDropZone(){
   z.ondrop=function(e){e.preventDefault();z.classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f)processWhisperFile(f);};
 }
 
-function clearTranscript(){utterances=[];fullTranscript='';currentSpeakerIdx=0;renderBubbles();updateCharCount();document.getElementById('timerDisplay').textContent='00:00';document.getElementById('interimBar').textContent='';document.getElementById('summaryBody').innerHTML='<div class="empty-state"><div class="empty-icon">✨</div><div class="empty-text">文字起こし後に<br>「AI要点整理」を実行すると<br>決定事項・TODOが<br>自動でまとまります</div></div>';}
+function clearTranscript(){utterances=[];fullTranscript='';currentSpeakerIdx=0;renderBubbles();updateCharCount();document.getElementById('timerDisplay').textContent='00:00';document.getElementById('interimBar').textContent='';
+  const btn=document.getElementById('btnSaveRecord');if(btn)btn.classList.remove('visible');document.getElementById('summaryBody').innerHTML='<div class="empty-state"><div class="empty-icon">✨</div><div class="empty-text">文字起こし後に<br>「AI要点整理」を実行すると<br>決定事項・TODOが<br>自動でまとまります</div></div>';}
 function copyTranscript(){const text=utterances.map(u=>'['+fmtSec(u.ts)+'] 【'+u.label+'】'+u.text).join('\n');if(!text.trim()){showToast('err','コピーする文字がありません');return;}navigator.clipboard.writeText(text).then(()=>showToast('ok','📋 クリップボードにコピーしました'));}
 function applyReplace(){if(!utterances.length){showToast('err','発言がありません');return;}const rules=getRules();if(!rules.length){openSpeakerModal();showToast('err','置換ルールが登録されていません');return;}let count=0;utterances=utterances.map(u=>{let t=u.text;for(const r of rules){const re=new RegExp(r.from.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g');const m=t.match(re);if(m)count+=m.length;t=t.replace(re,r.to);}return{...u,text:t};});renderBubbles();updateTranscriptUI();showToast('ok','✅ '+count+' 箇所を置換しました');}
 
@@ -724,7 +775,15 @@ function renderSummary(r){
   for(const def of CARD_DEFS){const val=r[def.key];if(!val||(Array.isArray(val)&&!val.length))continue;html+='<div class="summary-card"><div class="summary-card-header"><span class="summary-card-icon">'+def.icon+'</span><span class="summary-card-title">'+def.title+'</span></div>';if(def.type==='list'){html+='<ul class="summary-items">';for(const item of val)html+='<li class="summary-item">'+escHtml(item)+'</li>';html+='</ul>';}else if(def.type==='todo'){for(const t of val)html+='<div class="todo-item"><div class="todo-check" onclick="this.classList.toggle(\'done\')"></div><div class="todo-text">'+escHtml(t.text)+'</div>'+(t.assignee?'<span class="todo-assignee">'+escHtml(t.assignee)+'</span>':'')+'</div>';}else{html+='<div style="font-size:13px;color:var(--text);line-height:1.65">'+escHtml(val)+'</div>';}html+='</div>';}
   document.getElementById('summaryBody').innerHTML=html||'<div class="empty-state"><div class="empty-text">要点が見つかりませんでした</div></div>';
 }
-function saveHistory(text,result){let hist=JSON.parse(localStorage.getItem('vm_history')||'[]');hist.unshift({id:Date.now(),date:new Date().toLocaleString('ja-JP'),scene:currentScene,sceneLabel:SCENE_LABELS[currentScene],transcript:text,utterances,summary:result,title:(result.decisions&&result.decisions[0])||text.slice(0,20)+'…'});if(hist.length>30)hist=hist.slice(0,30);localStorage.setItem('vm_history',JSON.stringify(hist));renderHistory();}
+function saveHistory(text,result){
+  let hist=JSON.parse(localStorage.getItem('vm_history')||'[]');
+  const dateStr=new Date().toLocaleDateString('ja-JP',{month:'long',day:'numeric'});
+  const title=SCENE_LABELS[currentScene]+' '+dateStr;
+  hist.unshift({id:Date.now(),date:new Date().toLocaleString('ja-JP'),scene:currentScene,sceneLabel:SCENE_LABELS[currentScene],transcript:text,utterances,summary:result,title:title});
+  if(hist.length>50)hist=hist.slice(0,50);
+  localStorage.setItem('vm_history',JSON.stringify(hist));
+  renderHistory();
+}
 function renderHistory(){const hist=JSON.parse(localStorage.getItem('vm_history')||'[]'),list=document.getElementById('historyList');if(!hist.length){list.innerHTML='<div class="empty-history">録音・要点整理した記録が<br>ここに表示されます</div>';return;}list.innerHTML=hist.map(h=>'<div class="history-item" onclick="loadHistory('+h.id+')"><div class="history-date">'+h.date+'</div><div class="history-title">'+escHtml(h.title)+'</div><div class="history-scene">'+h.sceneLabel+'</div></div>').join('');}
 function loadHistory(id){const hist=JSON.parse(localStorage.getItem('vm_history')||'[]'),h=hist.find(x=>x.id===id);if(!h)return;utterances=(h.utterances&&h.utterances.length)?h.utterances:[{speaker:'a',label:'話者A',icon:'A',side:'right',text:h.transcript,ts:0}];fullTranscript=h.transcript;currentScene=h.scene;document.querySelectorAll('.scene-btn').forEach(b=>b.classList.toggle('active',b.dataset.scene===h.scene));document.getElementById('sceneBadgeText').textContent=h.sceneLabel;renderBubbles();updateCharCount();renderSummary(h.summary);}
 
@@ -782,6 +841,50 @@ function downloadBlob(blob,filename){
   }
 }
 function formatFilename(d){return d.replace(/[/:]/g,'-').replace(/\s/g,'_');}
+
+// ════════════════════════════════════════════
+// 記録保存モーダル
+// ════════════════════════════════════════════
+function openSaveModal() {
+  if (!utterances.length) { showToast('err', '保存する発言がありません'); return; }
+  // タイトルを自動提案
+  const suggested = utterances[0].text.slice(0, 20) + '…';
+  const dateStr = new Date().toLocaleDateString('ja-JP', {month:'long', day:'numeric'});
+  document.getElementById('titleInput').value = SCENE_LABELS[currentScene] + ' ' + dateStr;
+  document.getElementById('titleModal').classList.add('show');
+  setTimeout(() => document.getElementById('titleInput').select(), 100);
+}
+function closeSaveModal() {
+  document.getElementById('titleModal').classList.remove('show');
+}
+function confirmSave() {
+  const titleVal = document.getElementById('titleInput').value.trim();
+  const title = titleVal || (SCENE_LABELS[currentScene] + ' ' + new Date().toLocaleDateString('ja-JP'));
+  saveHistoryWithTitle(title);
+  closeSaveModal();
+  showToast('ok', '✅ 「' + title + '」を保存しました');
+}
+function saveHistoryWithTitle(title) {
+  let hist = JSON.parse(localStorage.getItem('vm_history') || '[]');
+  // 要点整理結果があれば含める
+  const summaryBody = document.getElementById('summaryBody');
+  const hasSummary = summaryBody && summaryBody.querySelector('.summary-card');
+  const summaryText = hasSummary ? buildSummaryText() : '';
+  hist.unshift({
+    id: Date.now(),
+    date: new Date().toLocaleString('ja-JP'),
+    scene: currentScene,
+    sceneLabel: SCENE_LABELS[currentScene],
+    transcript: fullTranscript,
+    utterances: utterances,
+    summary: null,
+    summaryText: summaryText,
+    title: title
+  });
+  if (hist.length > 50) hist = hist.slice(0, 50);
+  localStorage.setItem('vm_history', JSON.stringify(hist));
+  renderHistory();
+}
 
 function setScene(btn){document.querySelectorAll('.scene-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentScene=btn.dataset.scene;document.getElementById('sceneBadgeText').textContent=SCENE_LABELS[currentScene];}
 function openApiModal(){document.getElementById('apiKeyInput').value=localStorage.getItem('vm_apikey')||'';document.getElementById('apiModal').classList.remove('hidden');}
