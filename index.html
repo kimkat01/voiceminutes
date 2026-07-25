@@ -333,16 +333,17 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   /* 保存ボタン */
   .btn-save-record {
-    display: none; width: 100%; padding: 10px;
+    display: block; width: 100%; padding: 10px;
     background: linear-gradient(135deg, var(--green), #26c4a8);
     border: none; border-radius: 20px; color: #fff;
     font-family: 'Noto Sans JP', sans-serif;
     font-size: 13px; font-weight: 700; cursor: pointer;
     transition: all 0.15s; margin-top: 8px;
     box-shadow: 0 3px 10px rgba(60,184,120,0.30);
+    opacity: 0.4;
   }
-  .btn-save-record.visible { display: block; }
-  .btn-save-record:hover { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(60,184,120,0.40); }
+  .btn-save-record.visible { opacity: 1; }
+  .btn-save-record.visible:hover { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(60,184,120,0.40); }
 
   /* タイトル入力モーダル */
   .title-modal { display: none; position: fixed; inset: 0; background: rgba(30,10,60,0.45); z-index: 300; align-items: center; justify-content: center; backdrop-filter: blur(6px); }
