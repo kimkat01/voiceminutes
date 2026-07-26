@@ -958,7 +958,27 @@ function saveHistory(text,result){
   renderHistory();
 }
 function renderHistory(){const hist=JSON.parse(localStorage.getItem('vm_history')||'[]'),list=document.getElementById('historyList');if(!hist.length){list.innerHTML='<div class="empty-history">録音・要点整理した記録が<br>ここに表示されます</div>';return;}list.innerHTML=hist.map(h=>'<div class="history-item" onclick="loadHistory('+h.id+')"><div class="history-date">'+h.date+'</div><div class="history-title">'+escHtml(h.title)+'</div><div class="history-scene">'+h.sceneLabel+'</div></div>').join('');}
-function loadHistory(id){const hist=JSON.parse(localStorage.getItem('vm_history')||'[]'),h=hist.find(x=>x.id===id);if(!h)return;utterances=(h.utterances&&h.utterances.length)?h.utterances:[{speaker:'a',label:'話者A',icon:'A',side:'right',text:h.transcript,ts:0}];fullTranscript=h.transcript;currentScene=h.scene;document.querySelectorAll('.scene-btn').forEach(b=>b.classList.toggle('active',b.dataset.scene===h.scene));document.getElementById('sceneBadgeText').textContent=h.sceneLabel;renderBubbles();updateCharCount();renderSummary(h.summary);}
+function loadHistory(id){
+  const hist=JSON.parse(localStorage.getItem('vm_history')||'[]');
+  const h=hist.find(x=>x.id===id);
+  if(!h)return;
+  utterances=(h.utterances&&h.utterances.length)?h.utterances:[{speaker:'a',label:'話者A',icon:'A',side:'right',text:h.transcript,ts:0}];
+  fullTranscript=h.transcript;
+  currentScene=h.scene;
+  document.querySelectorAll('.scene-btn').forEach(b=>b.classList.toggle('active',b.dataset.scene===h.scene));
+  // sceneBadgeTextは削除済みのため条件付きで
+  const badge=document.getElementById('sceneBadgeText');
+  if(badge) badge.textContent=h.sceneLabel;
+  renderBubbles();
+  updateCharCount();
+  updateTranscriptUI();
+  // summaryがある場合のみ表示
+  if(h.summary){
+    renderSummary(h.summary);
+  } else {
+    document.getElementById('summaryBody').innerHTML='<div class="empty-state"><div class="empty-icon">✨</div><div class="empty-text">AI要点整理を実行すると<br>決定事項・TODOが<br>自動でまとまります</div></div>';
+  }
+}
 
 function getExportMeta(){return{now:new Date().toLocaleString('ja-JP'),scene:SCENE_LABELS[currentScene]||currentScene};}
 function buildLogText(){return utterances.map(u=>'['+fmtSec(u.ts)+'] 【'+u.label+'】'+u.text).join('\n');}
