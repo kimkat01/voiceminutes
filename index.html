@@ -957,7 +957,32 @@ function saveHistory(text,result){
   localStorage.setItem('vm_history',JSON.stringify(hist));
   renderHistory();
 }
-function renderHistory(){const hist=JSON.parse(localStorage.getItem('vm_history')||'[]'),list=document.getElementById('historyList');if(!hist.length){list.innerHTML='<div class="empty-history">録音・要点整理した記録が<br>ここに表示されます</div>';return;}list.innerHTML=hist.map(h=>'<div class="history-item" onclick="loadHistory('+h.id+')"><div class="history-date">'+h.date+'</div><div class="history-title">'+escHtml(h.title)+'</div><div class="history-scene">'+h.sceneLabel+'</div></div>').join('');}
+function renderHistory(){
+  const hist=JSON.parse(localStorage.getItem('vm_history')||'[]');
+  const list=document.getElementById('historyList');
+  if(!hist.length){list.innerHTML='<div class="empty-history">録音・要点整理した記録が<br>ここに表示されます</div>';return;}
+  list.innerHTML=hist.map(h=>
+    '<div class="history-item" onclick="loadHistory('+h.id+')">' +
+    '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:4px">' +
+    '<div style="flex:1;min-width:0">' +
+    '<div class="history-date">'+h.date+'</div>' +
+    '<div class="history-title">'+escHtml(h.title)+'</div>' +
+    '<div class="history-scene">'+h.sceneLabel+'</div>' +
+    '</div>' +
+    '<button onclick="event.stopPropagation();deleteHistory('+h.id+')" style="flex-shrink:0;background:none;border:none;color:var(--text3);font-size:14px;cursor:pointer;padding:2px 4px;border-radius:4px;line-height:1;" title="削除">✕</button>' +
+    '</div>' +
+    '</div>'
+  ).join('');
+}
+
+function deleteHistory(id){
+  if(!confirm('この記録を削除しますか？')) return;
+  let hist=JSON.parse(localStorage.getItem('vm_history')||'[]');
+  hist=hist.filter(h=>h.id!==id);
+  localStorage.setItem('vm_history',JSON.stringify(hist));
+  renderHistory();
+  showToast('ok','🗑 記録を削除しました');
+}
 function loadHistory(id){
   const hist=JSON.parse(localStorage.getItem('vm_history')||'[]');
   const h=hist.find(x=>x.id===id);
