@@ -678,7 +678,7 @@ async function compressAudio(file) {
   const wavBlob = audioBufferToWav(rendered);
 
   // それでも25MBを超える場合はさらに分割（前半のみ）
-  if (wavBlob.size > 24 * 1024 * 1024) {
+  if (wavBlob.size > 20 * 1024 * 1024) {
     // 半分の長さで再試行
     const halfDuration = duration / 2;
     const offlineCtx2 = new OfflineAudioContext(1, Math.ceil(halfDuration * targetSampleRate), targetSampleRate);
@@ -737,7 +737,7 @@ function audioBufferToWav(buffer) {
 async function processWhisperFile(file){
   const apiKey=localStorage.getItem('vm_openai_key')||'';
   // 25MB超えの場合は自動圧縮
-  if(file.size > 25*1024*1024){
+  if(file.size > 20*1024*1024){
     showToast('ok', '⚙ ファイルが大きいため自動圧縮中… しばらくお待ちください');
     try {
       file = await compressAudio(file);
