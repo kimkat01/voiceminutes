@@ -655,176 +655,180 @@ function refreshWhisperKeyStatus(){const key=localStorage.getItem('vm_openai_key
 function handleWhisperDrop(e){e.preventDefault();document.getElementById('whisperDropZone').classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f)processWhisperFile(f);}
 function handleWhisperSelect(e){const f=e.target.files[0];if(f)processWhisperFile(f);e.target.value='';}
 // ════════════════════════════════════════════
-// 音声ファイル自動圧縮（25MB超え対応）
+// 音声ファイル自動分割・文字起こし
 // ════════════════════════════════════════════
-async function compressAudio(file) {
-  // Web Audio APIで読み込み
-  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  const arrayBuf = await file.arrayBuffer();
-  const audioBuf = await audioCtx.decodeAudioData(arrayBuf);
-  audioCtx.close();
 
-  // モノラル・16kHzにダウンサンプリング
-  const targetSampleRate = 16000;
-  const duration = audioBuf.duration;
-  const offlineCtx = new OfflineAudioContext(1, Math.ceil(duration * targetSampleRate), targetSampleRate);
-  const source = offlineCtx.createBufferSource();
-  source.buffer = audioBuf;
-  source.connect(offlineCtx.destination);
-  source.start();
-  const rendered = await offlineCtx.startRendering();
-
-  // WAV形式に変換
-  const wavBlob = audioBufferToWav(rendered);
-
-  // それでも25MBを超える場合はさらに分割（前半のみ）
-  if (wavBlob.size > 20 * 1024 * 1024) {
-    // 半分の長さで再試行
-    const halfDuration = duration / 2;
-    const offlineCtx2 = new OfflineAudioContext(1, Math.ceil(halfDuration * targetSampleRate), targetSampleRate);
-    const source2 = offlineCtx2.createBufferSource();
-    source2.buffer = audioBuf;
-    source2.connect(offlineCtx2.destination);
-    source2.start(0, 0, halfDuration);
-    const rendered2 = await offlineCtx2.startRendering();
-    const wavBlob2 = audioBufferToWav(rendered2);
-    showToast('ok', '⚠ 長時間音声のため前半' + Math.round(halfDuration/60) + '分を処理します');
-    return new File([wavBlob2], file.name.replace(/\.[^.]+$/, '_compressed.wav'), {type:'audio/wav'});
-  }
-
-  return new File([wavBlob], file.name.replace(/\.[^.]+$/, '_compressed.wav'), {type:'audio/wav'});
-}
-
+// AudioBufferをWAV Blobに変換
 function audioBufferToWav(buffer) {
   const numChannels = 1;
   const sampleRate = buffer.sampleRate;
-  const format = 1; // PCM
-  const bitDepth = 16;
   const samples = buffer.getChannelData(0);
-  const byteRate = sampleRate * numChannels * bitDepth / 8;
-  const blockAlign = numChannels * bitDepth / 8;
-  const dataSize = samples.length * blockAlign;
+  const dataSize = samples.length * 2;
   const wavBuffer = new ArrayBuffer(44 + dataSize);
   const view = new DataView(wavBuffer);
-
-  // WAVヘッダー
   const writeStr = (offset, str) => { for(let i=0;i<str.length;i++) view.setUint8(offset+i, str.charCodeAt(i)); };
   writeStr(0, 'RIFF');
   view.setUint32(4, 36 + dataSize, true);
   writeStr(8, 'WAVE');
   writeStr(12, 'fmt ');
   view.setUint32(16, 16, true);
-  view.setUint16(20, format, true);
+  view.setUint16(20, 1, true);
   view.setUint16(22, numChannels, true);
   view.setUint32(24, sampleRate, true);
-  view.setUint32(28, byteRate, true);
-  view.setUint16(32, blockAlign, true);
-  view.setUint16(34, bitDepth, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
   writeStr(36, 'data');
   view.setUint32(40, dataSize, true);
-
-  // PCMデータ
   let offset = 44;
   for (let i = 0; i < samples.length; i++) {
     const s = Math.max(-1, Math.min(1, samples[i]));
     view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
     offset += 2;
   }
-
   return new Blob([wavBuffer], {type: 'audio/wav'});
 }
 
+// AudioBufferを指定区間で切り出してWAV Blobに
+function sliceAudioBuffer(audioBuf, startSec, endSec, targetSampleRate) {
+  const duration = Math.min(endSec, audioBuf.duration) - startSec;
+  if (duration <= 0) return null;
+  const frameCount = Math.ceil(duration * targetSampleRate);
+  const offCtx = new OfflineAudioContext(1, frameCount, targetSampleRate);
+  const src = offCtx.createBufferSource();
+  src.buffer = audioBuf;
+  src.connect(offCtx.destination);
+  src.start(0, startSec, duration);
+  return offCtx.startRendering();
+}
+
 async function processWhisperFile(file){
-  const apiKey=localStorage.getItem('vm_openai_key')||'';
-  // 25MB超えの場合は自動圧縮
-  if(file.size > 20*1024*1024){
-    showToast('ok', '⚙ ファイルが大きいため自動圧縮中… しばらくお待ちください');
-    try {
-      file = await compressAudio(file);
-      showToast('ok', '✅ 圧縮完了（' + (file.size/1024/1024).toFixed(1) + 'MB）→ 文字起こし開始');
-    } catch(compErr) {
-      showToast('err', '❌ 圧縮エラー: ' + compErr.message);
-      return;
-    }
-  }
-  const zone=document.getElementById('whisperDropZone');
+  const apiKey = localStorage.getItem('vm_openai_key') || '';
+  const zone = document.getElementById('whisperDropZone');
   zone.classList.add('processing');
 
-  // 音声ファイルの長さを取得して処理時間を推定
-  let estimatedSec = 30; // デフォルト30秒
+  let audioBuf;
+  const TARGET_SR = 16000;       // 16kHz
+  const CHUNK_MIN = 10;          // 10分ごとに分割
+  const CHUNK_SEC = CHUNK_MIN * 60;
+
+  // ── Step1: デコード ──
   try {
+    zone.innerHTML = '<div class="whisper-countdown"><div class="countdown-status">🔄 音声を読み込み中…</div></div>';
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const arrayBuf = await file.arrayBuffer();
-    const audioBuf = await audioCtx.decodeAudioData(arrayBuf);
-    const durationMin = audioBuf.duration / 60;
-    // 1分の音声 → 約8秒で処理（Whisperの実績ベース）
-    estimatedSec = Math.max(10, Math.round(durationMin * 8));
+    audioBuf = await audioCtx.decodeAudioData(arrayBuf);
     audioCtx.close();
   } catch(e) {
-    // 取得できない場合はデフォルト値
+    showToast('err', '❌ 音声読み込みエラー: ' + e.message);
+    restoreWhisperDropZone(); return;
   }
 
-  // 円グラフカウントダウンUI
-  zone.innerHTML =
-    '<div class="whisper-countdown">' +
-    '<div class="countdown-ring-wrap">' +
-    '<svg class="countdown-ring" viewBox="0 0 100 100">' +
-    '<circle class="countdown-ring-bg" cx="50" cy="50" r="45"/>' +
-    '<circle class="countdown-ring-bar" id="countdownBar" cx="50" cy="50" r="45"/>' +
-    '</svg>' +
-    '<div class="countdown-center">' +
-    '<div class="countdown-sec" id="countdownSec">' + estimatedSec + '</div>' +
-    '<div class="countdown-label">秒</div>' +
-    '</div></div>' +
-    '<div class="countdown-filename">🎵 ' + file.name + '</div>' +
-    '<div class="countdown-status" id="countdownStatus">Whisperで文字起こし中…</div>' +
-    '</div>';
+  const totalDuration = audioBuf.duration;
+  const totalChunks = Math.ceil(totalDuration / CHUNK_SEC);
+  let allText = '';
+  let chunkStart = 0;
+  let chunkIndex = 0;
 
-  // カウントダウン開始
-  const circumference = 2 * Math.PI * 45; // ≈ 282.7
-  const bar = document.getElementById('countdownBar');
-  const secEl = document.getElementById('countdownSec');
-  const statusEl = document.getElementById('countdownStatus');
-  let remaining = estimatedSec;
-  if (bar) bar.style.strokeDasharray = circumference;
+  showToast('ok', '🎵 ' + Math.round(totalDuration/60) + '分の音声を' + totalChunks + '分割で処理します');
 
-  const countdownInt = setInterval(() => {
-    remaining--;
-    const progress = remaining / estimatedSec;
-    const offset = circumference * (1 - progress);
-    if (bar) {
-      bar.style.strokeDashoffset = offset;
-      if (remaining <= 5) bar.classList.add('finishing');
+  // ── Step2: チャンクごとに処理 ──
+  for (let i = 0; i < totalChunks; i++) {
+    chunkStart = i * CHUNK_SEC;
+    const chunkEnd = Math.min(chunkStart + CHUNK_SEC, totalDuration);
+    const progress = i / totalChunks;
+    const circumference = 2 * Math.PI * 45;
+
+    // 進捗UI更新
+    zone.innerHTML =
+      '<div class="whisper-countdown">' +
+      '<div class="countdown-ring-wrap">' +
+      '<svg class="countdown-ring" viewBox="0 0 100 100">' +
+      '<circle class="countdown-ring-bg" cx="50" cy="50" r="45"/>' +
+      '<circle class="countdown-ring-bar" id="countdownBar" cx="50" cy="50" r="45" style="stroke-dasharray:' + circumference + ';stroke-dashoffset:' + (circumference * (1 - progress)) + '"/>' +
+      '</svg>' +
+      '<div class="countdown-center">' +
+      '<div class="countdown-sec" style="font-size:16px">' + (i+1) + '/' + totalChunks + '</div>' +
+      '<div class="countdown-label">チャンク</div>' +
+      '</div></div>' +
+      '<div class="countdown-filename">🎵 ' + file.name + '</div>' +
+      '<div class="countdown-status">分割 ' + (i+1) + '/' + totalChunks + ' を文字起こし中… (' + Math.round(chunkStart/60) + '〜' + Math.round(chunkEnd/60) + '分)</div>' +
+      '</div>';
+
+    // チャンクをレンダリング
+    let rendered;
+    try {
+      rendered = await sliceAudioBuffer(audioBuf, chunkStart, chunkEnd, TARGET_SR);
+    } catch(e) {
+      showToast('err', '❌ 分割エラー (chunk ' + (i+1) + '): ' + e.message);
+      continue;
     }
-    if (secEl) {
-      if (remaining > 0) {
-        secEl.textContent = remaining;
-      } else {
-        secEl.textContent = '…';
-        if (statusEl) statusEl.textContent = 'もうすぐ完了…';
+
+    const wavBlob = audioBufferToWav(rendered);
+    const fd = new FormData();
+    fd.append('file', new File([wavBlob], 'chunk_' + i + '.wav', {type:'audio/wav'}), 'chunk_' + i + '.wav');
+    fd.append('model', 'whisper-1');
+    fd.append('language', 'ja');
+    fd.append('response_format', 'verbose_json');
+    fd.append('timestamp_granularities[]', 'segment');
+
+    try {
+      const res = await fetch('https://voiceminutes-proxy.cryk0289.workers.dev/whisper', {
+        method: 'POST',
+        headers: {'Authorization': 'Bearer ' + apiKey, 'X-OpenAI-Key': apiKey},
+        body: fd
+      });
+      const text = await res.text();
+      const data = JSON.parse(text);
+
+      if (data.error) {
+        showToast('err', '❌ Chunk ' + (i+1) + ' エラー: ' + (data.error.message || JSON.stringify(data.error)));
+        continue;
       }
+
+      // セグメントを吹き出しに追加（タイムスタンプはchunkStart分オフセット）
+      if (data.segments && data.segments.length > 0) {
+        const GAP_SEC = 1.5;
+        let speakerIdx = (utterances.length > 0 && utterances[utterances.length-1].side === 'right') ? 1 : 0;
+        let group = [], groupStart = Math.round(chunkStart + data.segments[0].start);
+        let prevEnd = data.segments[0].end;
+
+        for (let j = 0; j < data.segments.length; j++) {
+          const seg = data.segments[j];
+          const gap = seg.start - prevEnd;
+          if (j > 0 && gap >= GAP_SEC) {
+            if (group.length > 0) {
+              currentSpeakerIdx = speakerIdx;
+              addUtterance(group.join(''), groupStart);
+              group = [];
+            }
+            speakerIdx = 1 - speakerIdx;
+            groupStart = Math.round(chunkStart + seg.start);
+          }
+          group.push(seg.text.trim());
+          prevEnd = seg.end;
+        }
+        if (group.length > 0) {
+          currentSpeakerIdx = speakerIdx;
+          addUtterance(group.join(''), groupStart);
+        }
+      } else if (data.text && data.text.trim()) {
+        addUtterance(data.text.trim(), Math.round(chunkStart));
+      }
+
+      updateTranscriptUI();
+
+    } catch(e) {
+      showToast('err', '❌ Chunk ' + (i+1) + ' 通信エラー: ' + e.message);
     }
-  }, 1000);
+  }
 
-  // カウントダウン停止用にインターバルIDを保存
-  zone._countdownInt = countdownInt;
-
-  showToast('ok','🤖 Whisper APIで文字起こし中…');
-  try{
-    const fd=new FormData();fd.append('file',file,file.name);fd.append('model','whisper-1');fd.append('language','ja');fd.append('response_format','verbose_json');fd.append('timestamp_granularities[]','segment');
-    const res=await fetch('https://voiceminutes-proxy.cryk0289.workers.dev/whisper',{method:'POST',headers:{'Authorization':'Bearer '+apiKey,'X-OpenAI-Key':apiKey},body:fd});
-    if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||'HTTP '+res.status);}
-    const data=await res.json();
-    if(data.segments&&data.segments.length>0){
-      const GAP_SEC=1.5;let speakerIdx=0,group=[],groupStart=Math.round(data.segments[0].start),prevEnd=data.segments[0].end;
-      for(let i=0;i<data.segments.length;i++){const seg=data.segments[i],gap=seg.start-prevEnd;if(i>0&&gap>=GAP_SEC){if(group.length>0){currentSpeakerIdx=speakerIdx;addUtterance(group.join(''),groupStart);group=[];}speakerIdx=1-speakerIdx;groupStart=Math.round(seg.start);}group.push(seg.text.trim());prevEnd=seg.end;}
-      if(group.length>0){currentSpeakerIdx=speakerIdx;addUtterance(group.join(''),groupStart);}
-      currentSpeakerIdx=0;
-    }else if(data.text&&data.text.trim()){currentSpeakerIdx=0;addUtterance(data.text.trim(),0);}
-    updateTranscriptUI();showToast('ok','✅ Whisper文字起こし完了！ '+utterances.length+' 発言');
-  }catch(err){showToast('err','❌ Whisperエラー: '+err.message);}
-  finally{restoreWhisperDropZone();}
+  currentSpeakerIdx = 0;
+  showToast('ok', '✅ 全' + totalChunks + 'チャンクの文字起こし完了！ 計' + utterances.length + '発言');
+  restoreWhisperDropZone();
 }
+
+
 function restoreWhisperDropZone(){
   const z=document.getElementById('whisperDropZone');
   if(!z)return;
