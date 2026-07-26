@@ -622,30 +622,111 @@ function switchInputMode(mode,btn){document.querySelectorAll('.mode-tab').forEac
 function handleTextInputKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();addTextUtterance();}}
 function addTextUtterance(){const ta=document.getElementById('textInputArea'),text=ta.value.trim();if(!text){showToast('err','テキストを入力してください');return;}const idx=parseInt(document.getElementById('textSpkSelect').value,10);currentSpeakerIdx=idx;addUtterance(text,timerSec);updateTranscriptUI();ta.value='';ta.focus();showToast('ok','✅ 【'+SPEAKERS[idx].label+'】の発言を追加しました');}
 
-let recognition=null,recRestarting=false,interimBuffer='';
-const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-function startRec(){
-  if(!SpeechRecognition){showToast('err','❌ このブラウザはWeb Speech APIに対応していません。Chrome / Edgeをお使いください。');return;}
-  recognition=new SpeechRecognition();recognition.lang='ja-JP';recognition.continuous=true;recognition.interimResults=true;
-  const interim=document.getElementById('interimBar');
-  recognition.onresult=(event)=>{let it='';for(let i=event.resultIndex;i<event.results.length;i++){const r=event.results[i];if(r.isFinal){const t=r[0].transcript.trim();if(t){addUtterance(t,timerSec);updateTranscriptUI();}it='';}else{it+=r[0].transcript;}}interim.textContent=it?'🎙 '+it:'';interimBuffer=it;};
-  recognition.onerror=(e)=>{if(e.error==='no-speech'||e.error==='aborted')return;if(e.error==='not-allowed'){showToast('err','❌ マイクが許可されていません。アドレスバー横🔒からマイクを「許可」してください');stopRec();return;}showToast('err','⚠ 音声認識エラー: '+e.error);};
-  recognition.onend=()=>{if(isRecording&&!recRestarting){try{recognition.start();}catch(_){}}recRestarting=false;};
-  isRecording=true;recRestarting=false;recognition.start();
-  document.getElementById('btnStart').disabled=true;document.getElementById('btnStop').disabled=false;
-  document.getElementById('timerDisplay').classList.add('recording');
+// ════════════════════════════════════════════
+// マイク録音 → Whisper リアルタイム文字起こし
+// 30秒ごとにWhisperへ送信（高精度）
+// ════════════════════════════════════════════
+let mediaRecorder=null, audioStream=null, audioChunks=[];
+let whisperSegmentStart=0, whisperChunkInt=null;
+const WHISPER_INTERVAL=30000; // 30秒
+
+async function startRec(){
+  try {
+    audioStream = await navigator.mediaDevices.getUserMedia({audio:true});
+  } catch(e) {
+    const msg = e.name==='NotAllowedError'
+      ? '❌ マイクが許可されていません。アドレスバー横🔒からマイクを「許可」してください'
+      : '❌ マイクエラー: ' + e.message;
+    showToast('err', msg); return;
+  }
+
+  const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/ogg','audio/mp4']
+    .find(t => MediaRecorder.isTypeSupported(t)) || '';
+  mediaRecorder = new MediaRecorder(audioStream, mimeType ? {mimeType} : {});
+  audioChunks = [];
+  whisperSegmentStart = timerSec;
+
+  mediaRecorder.ondataavailable = e => { if(e.data && e.data.size>0) audioChunks.push(e.data); };
+
+  mediaRecorder.onstop = async () => {
+    if (!audioChunks.length) return;
+    const blob = new Blob(audioChunks, {type: mediaRecorder.mimeType||'audio/webm'});
+    audioChunks = [];
+    const segStart = whisperSegmentStart;
+    whisperSegmentStart = timerSec;
+
+    // インジケーター表示
+    const interim = document.getElementById('interimBar');
+    interim.textContent = '🔄 Whisperで文字起こし中…';
+
+    try {
+      const TARGET_SR = 16000;
+      const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+      const arrayBuf = await blob.arrayBuffer();
+      const audioBuf = await audioCtx.decodeAudioData(arrayBuf);
+      audioCtx.close();
+
+      const frameCount = Math.ceil(audioBuf.duration * TARGET_SR);
+      const offCtx = new OfflineAudioContext(1, frameCount, TARGET_SR);
+      const src = offCtx.createBufferSource();
+      src.buffer = audioBuf;
+      src.connect(offCtx.destination);
+      src.start();
+      const rendered = await offCtx.startRendering();
+      const wavBlob = audioBufferToWav(rendered);
+
+      const fd = new FormData();
+      fd.append('file', new File([wavBlob],'mic_chunk.wav',{type:'audio/wav'}), 'mic_chunk.wav');
+      fd.append('model','whisper-1');
+      fd.append('language','ja');
+      fd.append('response_format','text');
+
+      const apiKey = localStorage.getItem('vm_openai_key')||'';
+      const res = await fetch('https://voiceminutes-proxy.cryk0289.workers.dev/whisper',{
+        method:'POST',
+        headers:{'Authorization':'Bearer '+apiKey,'X-OpenAI-Key':apiKey},
+        body:fd
+      });
+      const text = await res.text();
+      const parsed = (() => { try{ const d=JSON.parse(text); return d.error?'':d.text||text; }catch{ return text; } })();
+
+      if(parsed && parsed.trim()) {
+        addUtterance(parsed.trim(), segStart);
+        updateTranscriptUI();
+      }
+    } catch(e) {
+      showToast('err','⚠ Whisper文字起こしエラー: '+e.message);
+    } finally {
+      interim.textContent = '';
+      // 録音継続中なら次のセグメントを開始
+      if(isRecording && mediaRecorder) {
+        mediaRecorder.start();
+        setTimeout(()=>{ if(isRecording&&mediaRecorder&&mediaRecorder.state==='recording') mediaRecorder.stop(); }, WHISPER_INTERVAL);
+      }
+    }
+  };
+
+  isRecording = true;
+  mediaRecorder.start();
+  setTimeout(()=>{ if(isRecording&&mediaRecorder&&mediaRecorder.state==='recording') mediaRecorder.stop(); }, WHISPER_INTERVAL);
+
+  document.getElementById('btnStart').disabled=true;
+  document.getElementById('btnStop').disabled=false;
   document.querySelector('.section-label-bar .dot').style.background='var(--red)';
-  startTimer();animateWave(true);showToast('ok','🎙 録音中… リアルタイムで文字起こしされます（Web Speech API）');
+  startTimer(); animateWave(true);
+  showToast('ok','🎙 録音中… 30秒ごとにWhisperで高精度文字起こしします');
 }
+
 function stopRec(){
-  isRecording=false;recRestarting=true;if(recognition){recognition.stop();recognition=null;}
-  const interim=document.getElementById('interimBar');
-  if(interimBuffer.trim()){addUtterance(interimBuffer.trim(),timerSec);updateTranscriptUI();interimBuffer='';}
-  interim.textContent='';
-  document.getElementById('btnStart').disabled=false;document.getElementById('btnStop').disabled=true;
-  document.getElementById('timerDisplay').classList.remove('recording');
+  isRecording=false;
+  if(mediaRecorder&&mediaRecorder.state==='recording') mediaRecorder.stop();
+  if(audioStream){ audioStream.getTracks().forEach(t=>t.stop()); audioStream=null; }
+
+  document.getElementById('btnStart').disabled=false;
+  document.getElementById('btnStop').disabled=true;
   document.querySelector('.section-label-bar .dot').style.background='var(--red)';
-  stopTimer();animateWave(false);showToast('ok','✅ 録音停止');
+  stopTimer(); animateWave(false);
+  showToast('ok','⏳ 録音停止。最後のセグメントを文字起こし中…');
 }
 
 
