@@ -3,43 +3,43 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VoiceMinutes v2.2｜音声記録・要点整理</title>
+<title>VoiceMinutes v2.3｜音声記録・要点整理</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 
   /* ════════════════════════════════
-     VoiceMinutes v2.2 — パープルバイオレットテーマ
-     #8a2be2 ベース・清潔感・丸みのあるUI
+     VoiceMinutes v2.3 — ブルーテーマ
+     #2b6ee2 ベース・清潔感・丸みのあるUI
   ════════════════════════════════ */
   :root {
-    --bg:        #faf7ff;
+    --bg:        #f5f8ff;
     --surface:   #ffffff;
-    --surface2:  #f3eeff;
-    --border:    #e0d0f8;
-    --border2:   #c8a8f0;
-    --text:      #1e0a3c;
-    --text2:     #5a3a8a;
-    --text3:     #9a7ac0;
-    --accent:    #8a2be2;
-    --accent2:   #6a10c0;
-    --light:     #b06aff;
+    --surface2:  #eaf1ff;
+    --border:    #cfe0fb;
+    --border2:   #a8c8f0;
+    --text:      #0a1e3c;
+    --text2:     #3a5a8a;
+    --text3:     #7a9ac0;
+    --accent:    #2b6ee2;
+    --accent2:   #1050c0;
+    --light:     #6aa0ff;
     --green:     #3cb878;
     --green2:    #d0f0e4;
     --red:       #e05a5a;
     --yellow:    #f0b429;
     --teal:      #2eb8c8;
     --pink:      #e060a8;
-    --pulse:     rgba(138,43,226,0.22);
-    --spk-a: #8a2be2; --spk-a-bg: rgba(138,43,226,0.09);
+    --pulse:     rgba(43,110,226,0.22);
+    --spk-a: #2b6ee2; --spk-a-bg: rgba(43,110,226,0.09);
     --spk-b: #2eb8c8; --spk-b-bg: rgba(46,184,200,0.09);
     --spk-c: #e060a8; --spk-c-bg: rgba(224,96,168,0.09);
     --spk-d: #3cb878; --spk-d-bg: rgba(60,184,120,0.09);
     --spk-e: #f0b429; --spk-e-bg: rgba(240,180,41,0.09);
     --radius: 14px;
     --radius-sm: 10px;
-    --shadow-sm: 0 1px 5px rgba(80,20,140,0.08);
-    --shadow: 0 4px 16px rgba(80,20,140,0.11);
-    --shadow-lg: 0 8px 32px rgba(80,20,140,0.16);
+    --shadow-sm: 0 1px 5px rgba(20,60,140,0.08);
+    --shadow: 0 4px 16px rgba(20,60,140,0.11);
+    --shadow-lg: 0 8px 32px rgba(20,60,140,0.16);
   }
 
   html { transition: background 0.25s, color 0.25s; }
@@ -54,8 +54,8 @@
   .header {
     display: flex; align-items: center; justify-content: space-between;
     padding: 0 24px; height: 60px; flex-shrink: 0;
-    background: linear-gradient(135deg, #8a2be2, #b06aff);
-    box-shadow: 0 2px 16px rgba(138,43,226,0.30);
+    background: #2b6ee2;
+    box-shadow: 0 2px 16px rgba(43,110,226,0.30);
     position: relative; z-index: 100;
   }
   .logo { display: flex; align-items: center; gap: 12px; }
@@ -96,7 +96,7 @@
   }
   .sidebar::before {
     content: ''; position: absolute; left: 0; top: 0; bottom: 0;
-    width: 4px; background: linear-gradient(to bottom, #8a2be2, #b06aff);
+    width: 4px; background: linear-gradient(to bottom, #2b6ee2, #6aa0ff);
     border-radius: 0 3px 3px 0;
   }
   .sidebar-section { padding: 14px 14px 12px 18px; border-bottom: 1.5px solid var(--border); }
@@ -117,7 +117,7 @@
   }
   .scene-btn:hover { background: var(--surface2); border-color: var(--border); color: var(--text); }
   .scene-btn.active {
-    background: rgba(138,43,226,0.10);
+    background: rgba(43,110,226,0.10);
     border-color: var(--accent); color: var(--accent2); font-weight: 600;
     box-shadow: var(--shadow-sm);
   }
@@ -134,7 +134,7 @@
   .history-title { font-size: 12px; color: var(--text); margin-top: 2px; font-weight: 500; }
   .history-scene {
     display: inline-block; font-size: 10px; color: var(--accent2);
-    background: rgba(138,43,226,0.10); border-radius: 10px;
+    background: rgba(43,110,226,0.10); border-radius: 10px;
     padding: 1px 7px; margin-top: 3px; font-weight: 600;
   }
   .empty-history { padding: 28px 14px; text-align: center; color: var(--text3); font-size: 12px; line-height: 1.7; }
@@ -149,7 +149,7 @@
   .scene-badge {
     display: flex; align-items: center; gap: 6px;
     font-size: 12px; font-weight: 600; color: var(--accent2);
-    background: rgba(138,43,226,0.09); border: 1.5px solid rgba(138,43,226,0.22);
+    background: rgba(43,110,226,0.09); border: 1.5px solid rgba(43,110,226,0.22);
     border-radius: 20px; padding: 5px 12px;
   }
   .scene-badge-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
@@ -168,7 +168,7 @@
     padding: 9px 20px; border-radius: 30px; border: none; cursor: pointer;
     font-family: 'Noto Sans JP', sans-serif; font-size: 13px; font-weight: 700; transition: all 0.15s;
   }
-  .btn-rec.start { background: linear-gradient(135deg, var(--red), #f09050); color: #fff; box-shadow: 0 3px 12px rgba(224,90,90,0.35); }
+  .btn-rec.start { background: var(--red); color: #fff; box-shadow: 0 3px 12px rgba(224,90,90,0.35); }
   .btn-rec.start:hover { transform: translateY(-1px); box-shadow: 0 5px 18px rgba(224,90,90,0.45); }
   .btn-rec.stop { background: var(--surface2); border: 1.5px solid var(--border2); color: var(--text2); border-radius: 30px; }
   .btn-rec.stop:hover { background: var(--border); color: var(--text); }
@@ -180,13 +180,13 @@
 
   .waveform-wrap { height: 32px; margin-top: 10px; display: flex; align-items: center; gap: 2px; }
   .wave-bar { flex: 1; background: var(--border); border-radius: 3px; transition: height 0.08s ease; min-height: 3px; }
-  .wave-bar.active { background: linear-gradient(to top, #8a2be2, #b06aff); }
+  .wave-bar.active { background: linear-gradient(to top, #2b6ee2, #6aa0ff); }
 
   /* ── 文字起こしエリア ── */
   .transcript-area { flex: 1; overflow-y: auto; padding: 16px 18px; }
   .transcript-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
   .transcript-label { display: flex; align-items: center; gap: 8px; font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; }
-  .transcript-label::before { content: ''; width: 4px; height: 16px; background: linear-gradient(to bottom, #8a2be2, #b06aff); border-radius: 3px; }
+  .transcript-label::before { content: ''; width: 4px; height: 16px; background: linear-gradient(to bottom, #2b6ee2, #6aa0ff); border-radius: 3px; }
   .transcript-actions { display: flex; gap: 6px; }
   .transcript-count { font-size: 10px; color: var(--text3); font-family: 'DM Mono', monospace; background: var(--surface2); border: 1.5px solid var(--border); border-radius: 20px; padding: 2px 10px; font-weight: 600; }
 
@@ -197,7 +197,7 @@
   @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
   .bubble-row.right { flex-direction: row-reverse; }
   .spk-icon { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; color: #fff; box-shadow: var(--shadow-sm); }
-  .spk-a .spk-icon { background: linear-gradient(135deg, #8a2be2, #b06aff); }
+  .spk-a .spk-icon { background: linear-gradient(135deg, #2b6ee2, #6aa0ff); }
   .spk-b .spk-icon { background: linear-gradient(135deg, #2eb8c8, #60d0e0); }
   .spk-c .spk-icon { background: linear-gradient(135deg, #e060a8, #f090c0); }
   .spk-d .spk-icon { background: linear-gradient(135deg, #3cb878, #70d0a0); }
@@ -211,7 +211,7 @@
   .bubble-text { padding: 10px 14px; border-radius: 18px; font-size: 13px; line-height: 1.7; color: var(--text); word-break: break-all; box-shadow: var(--shadow-sm); }
   .bubble-row:not(.right) .bubble-text { border-bottom-left-radius: 5px; }
   .bubble-row.right .bubble-text { border-bottom-right-radius: 5px; }
-  .spk-a .bubble-text { background: var(--spk-a-bg); border: 1.5px solid rgba(138,43,226,0.20); }
+  .spk-a .bubble-text { background: var(--spk-a-bg); border: 1.5px solid rgba(43,110,226,0.20); }
   .spk-b .bubble-text { background: var(--spk-b-bg); border: 1.5px solid rgba(46,184,200,0.20); }
   .spk-c .bubble-text { background: var(--spk-c-bg); border: 1.5px solid rgba(224,96,168,0.20); }
   .spk-d .bubble-text { background: var(--spk-d-bg); border: 1.5px solid rgba(60,184,120,0.20); }
@@ -222,7 +222,7 @@
 
   /* ── ファイルドロップゾーン ── */
   .file-drop-zone { border: 2px dashed var(--border2); border-radius: 0 0 var(--radius-sm) var(--radius-sm); padding: 12px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--surface2); transition: all 0.2s; }
-  .file-drop-zone.drag-over { border-color: var(--accent); background: rgba(138,43,226,0.06); box-shadow: 0 0 0 3px rgba(138,43,226,0.10); }
+  .file-drop-zone.drag-over { border-color: var(--accent); background: rgba(43,110,226,0.06); box-shadow: 0 0 0 3px rgba(43,110,226,0.10); }
   .file-drop-zone.processing { border-color: var(--teal); background: rgba(46,184,200,0.06); }
   .file-drop-icon { font-size: 18px; flex-shrink: 0; }
   .file-drop-text { font-size: 12px; color: var(--text2); }
@@ -230,7 +230,7 @@
   .file-label { cursor: pointer !important; background: var(--accent) !important; color: #fff !important; border-color: var(--accent) !important; padding: 5px 14px; border-radius: 20px !important; font-weight: 600 !important; }
   .file-label:hover { filter: brightness(1.1); }
   .file-progress { flex: 1; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; min-width: 80px; }
-  .file-progress-bar { height: 100%; background: linear-gradient(90deg, #8a2be2, #b06aff); border-radius: 3px; width: 0%; transition: width 0.3s ease; animation: progress-pulse 1.5s ease-in-out infinite; }
+  .file-progress-bar { height: 100%; background: linear-gradient(90deg, #2b6ee2, #6aa0ff); border-radius: 3px; width: 0%; transition: width 0.3s ease; animation: progress-pulse 1.5s ease-in-out infinite; }
   @keyframes progress-pulse { 0%,100%{opacity:1} 50%{opacity:0.65} }
 
   /* ── 入力モードタブ ── */
@@ -248,30 +248,45 @@
   .text-speaker-row { display: flex; gap: 6px; align-items: center; font-size: 11px; color: var(--text3); }
   .spk-select { padding: 4px 10px; border-radius: 20px; border: 1.5px solid var(--border2); background: var(--surface2); color: var(--text); font-size: 12px; font-family: 'Noto Sans JP', sans-serif; cursor: pointer; outline: none; }
   .text-input-ta { width: 100%; padding: 9px 12px; background: var(--surface2); border: 1.5px solid var(--border2); border-radius: var(--radius-sm); color: var(--text); font-family: 'Noto Sans JP', sans-serif; font-size: 13px; resize: none; outline: none; line-height: 1.6; transition: border 0.15s; min-height: 68px; }
-  .text-input-ta:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(138,43,226,0.10); }
+  .text-input-ta:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(43,110,226,0.10); }
   .text-input-ta::placeholder { color: var(--text3); }
-  .btn-add-text { padding: 9px 14px; border-radius: 20px; background: linear-gradient(135deg, #8a2be2, #b06aff); color: #fff; border: none; font-size: 12px; font-weight: 700; cursor: pointer; font-family: 'Noto Sans JP', sans-serif; transition: all 0.15s; white-space: nowrap; align-self: flex-end; box-shadow: 0 2px 8px rgba(138,43,226,0.28); }
-  .btn-add-text:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(138,43,226,0.38); }
+  .btn-add-text { padding: 9px 14px; border-radius: 20px; background: linear-gradient(135deg, #2b6ee2, #6aa0ff); color: #fff; border: none; font-size: 12px; font-weight: 700; cursor: pointer; font-family: 'Noto Sans JP', sans-serif; transition: all 0.15s; white-space: nowrap; align-self: flex-end; box-shadow: 0 2px 8px rgba(43,110,226,0.28); }
+  .btn-add-text:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(43,110,226,0.38); }
   .text-hint { font-size: 10px; color: var(--text3); margin-top: 4px; line-height: 1.5; }
 
   /* Whisper */
-  .whisper-info { font-size: 11px; color: var(--text2); line-height: 1.65; margin-bottom: 10px; padding: 9px 12px; background: rgba(138,43,226,0.06); border-radius: var(--radius-sm); border: 1.5px solid rgba(138,43,226,0.18); }
+  .whisper-info { font-size: 11px; color: var(--text2); line-height: 1.65; margin-bottom: 10px; padding: 9px 12px; background: rgba(43,110,226,0.06); border-radius: var(--radius-sm); border: 1.5px solid rgba(43,110,226,0.18); }
   .whisper-info strong { color: var(--accent); }
   .whisper-key-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
   .whisper-key-input { flex: 1; padding: 7px 12px; background: var(--surface2); border: 1.5px solid var(--border2); border-radius: 20px; color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; outline: none; transition: border 0.15s; }
-  .whisper-key-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(138,43,226,0.10); }
-  .btn-save-whisper { padding: 7px 14px; border-radius: 20px; background: linear-gradient(135deg, #8a2be2, #b06aff); color: #fff; border: none; font-size: 11px; font-weight: 700; cursor: pointer; font-family: 'Noto Sans JP', sans-serif; white-space: nowrap; transition: all 0.12s; box-shadow: 0 2px 8px rgba(138,43,226,0.25); }
+  .whisper-key-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(43,110,226,0.10); }
+  .btn-save-whisper { padding: 7px 14px; border-radius: 20px; background: linear-gradient(135deg, #2b6ee2, #6aa0ff); color: #fff; border: none; font-size: 11px; font-weight: 700; cursor: pointer; font-family: 'Noto Sans JP', sans-serif; white-space: nowrap; transition: all 0.12s; box-shadow: 0 2px 8px rgba(43,110,226,0.25); }
   .btn-save-whisper:hover { filter: brightness(1.08); }
   .whisper-key-status { font-size: 10px; margin-bottom: 8px; padding: 4px 10px; border-radius: 20px; display: inline-block; font-weight: 600; }
   .whisper-key-status.ok { color: var(--green); background: rgba(60,184,120,0.12); }
   .whisper-key-status.ng { color: var(--red); background: rgba(224,90,90,0.10); }
+  .vocab-row { margin-bottom: 10px; }
+  .vocab-label { display: block; font-size: 11px; font-weight: 700; color: var(--text2); margin-bottom: 5px; }
+  .vocab-input { width: 100%; padding: 8px 12px; background: var(--surface2); border: 1.5px solid var(--border2); border-radius: 20px; color: var(--text); font-family: 'Noto Sans JP', sans-serif; font-size: 12px; outline: none; transition: border 0.15s; }
+  .vocab-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(43,110,226,0.10); }
+  .vocab-hint { font-size: 10px; color: var(--text3); margin-top: 5px; line-height: 1.5; }
+  .vocab-dropdown-wrap { position: relative; }
+  .vocab-dropdown-panel {
+    position: absolute; top: calc(100% + 8px); right: 0; width: 300px;
+    background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow-lg); padding: 14px; z-index: 200;
+    display: none;
+  }
+  .vocab-dropdown-panel.open { display: block; }
+  .vocab-dropdown-title { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .vocab-dropdown-desc { font-size: 11px; color: var(--text2); line-height: 1.6; margin-bottom: 10px; }
 
   /* ── 右パネル ── */
   .right-panel { background: var(--surface); display: flex; flex-direction: column; overflow: hidden; position: relative; }
-  .right-panel::after { content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 4px; background: linear-gradient(to bottom, #8a2be2, #b06aff); }
-  .right-header { padding: 0 16px; height: 52px; border-bottom: 2px solid var(--accent); display: flex; align-items: center; background: rgba(138,43,226,0.06); flex-shrink: 0; }
+  .right-panel::after { content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 4px; background: linear-gradient(to bottom, #2b6ee2, #6aa0ff); }
+  .right-header { padding: 0 16px; height: 52px; border-bottom: 2px solid var(--accent); display: flex; align-items: center; background: rgba(43,110,226,0.06); flex-shrink: 0; }
   .right-title { font-size: 13px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
-  .ai-badge { font-size: 9px; padding: 2px 8px; background: rgba(138,43,226,0.12); color: var(--accent2); border: 1.5px solid rgba(138,43,226,0.25); border-radius: 20px; font-weight: 700; letter-spacing: 0.5px; }
+  .ai-badge { font-size: 9px; padding: 2px 8px; background: rgba(43,110,226,0.12); color: var(--accent2); border: 1.5px solid rgba(43,110,226,0.25); border-radius: 20px; font-weight: 700; letter-spacing: 0.5px; }
   .right-body { flex: 1; overflow-y: auto; padding: 14px; }
 
   /* 要点カード */
@@ -290,15 +305,15 @@
   .todo-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text); }
   .todo-item:last-child { border-bottom: none; }
   .todo-check { width: 16px; height: 16px; border-radius: 5px; border: 2px solid var(--border2); flex-shrink: 0; margin-top: 1px; cursor: pointer; transition: all 0.15s; }
-  .todo-check:hover { border-color: var(--accent); background: rgba(138,43,226,0.08); }
+  .todo-check:hover { border-color: var(--accent); background: rgba(43,110,226,0.08); }
   .todo-check.done { background: var(--accent); border-color: var(--accent); }
   .todo-text { flex: 1; line-height: 1.5; }
   .todo-assignee { font-size: 10px; color: var(--text2); background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 1px 8px; flex-shrink: 0; font-weight: 600; }
 
   /* AI実行エリア */
-  .ai-run-area { padding: 12px 14px; border-top: 1.5px solid var(--border); background: rgba(138,43,226,0.04); flex-shrink: 0; }
-  .btn-ai { width: 100%; padding: 12px; background: linear-gradient(135deg, #8a2be2, #b06aff); border: none; border-radius: 30px; color: #fff; font-family: 'Noto Sans JP', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px; transition: all 0.15s; box-shadow: 0 3px 14px rgba(138,43,226,0.32); }
-  .btn-ai:hover { transform: translateY(-1px); box-shadow: 0 5px 20px rgba(138,43,226,0.42); }
+  .ai-run-area { padding: 12px 14px; border-top: 1.5px solid var(--border); background: rgba(43,110,226,0.04); flex-shrink: 0; }
+  .btn-ai { width: 100%; padding: 12px; background: linear-gradient(135deg, #2b6ee2, #6aa0ff); border: none; border-radius: 30px; color: #fff; font-family: 'Noto Sans JP', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px; transition: all 0.15s; box-shadow: 0 3px 14px rgba(43,110,226,0.32); }
+  .btn-ai:hover { transform: translateY(-1px); box-shadow: 0 5px 20px rgba(43,110,226,0.42); }
   .btn-ai:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
   .ai-hint { font-size: 10px; color: var(--text3); text-align: center; margin-top: 7px; line-height: 1.5; }
 
@@ -319,11 +334,11 @@
   .modal-desc { font-size: 12px; color: var(--text2); line-height: 1.7; margin-bottom: 18px; }
   .modal-label { font-size: 11px; color: var(--text2); margin-bottom: 6px; font-weight: 600; }
   .modal-input { width: 100%; padding: 10px 14px; background: var(--surface2); border: 1.5px solid var(--border2); border-radius: var(--radius-sm); color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; outline: none; transition: border 0.15s; margin-bottom: 14px; }
-  .modal-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(138,43,226,0.10); }
+  .modal-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(43,110,226,0.10); }
   .modal-btns { display: flex; gap: 10px; justify-content: flex-end; }
   .btn-modal { padding: 9px 20px; border-radius: 20px; font-size: 13px; cursor: pointer; font-family: 'Noto Sans JP', sans-serif; font-weight: 700; border: none; transition: all 0.12s; }
   .btn-modal.cancel { background: var(--surface2); color: var(--text2); border: 1.5px solid var(--border2); }
-  .btn-modal.save { background: linear-gradient(135deg, #8a2be2, #b06aff); color: #fff; box-shadow: 0 2px 10px rgba(138,43,226,0.28); }
+  .btn-modal.save { background: linear-gradient(135deg, #2b6ee2, #6aa0ff); color: #fff; box-shadow: 0 2px 10px rgba(43,110,226,0.28); }
   .btn-modal:hover { transform: translateY(-1px); filter: brightness(1.06); }
   .toast { position: fixed; bottom: 22px; right: 22px; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 12px 18px; font-size: 13px; color: var(--text); box-shadow: var(--shadow-lg); transform: translateY(16px); opacity: 0; transition: all 0.25s; z-index: 300; display: flex; align-items: center; gap: 9px; max-width: 330px; }
   .toast.show { transform: translateY(0); opacity: 1; }
@@ -357,7 +372,7 @@
     color: var(--text); font-family: 'Noto Sans JP', sans-serif;
     font-size: 14px; outline: none; transition: border 0.15s; margin-bottom: 14px;
   }
-  .title-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(138,43,226,0.10); }
+  .title-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(43,110,226,0.10); }
   .title-modal-btns { display: flex; gap: 10px; justify-content: flex-end; }
 
   ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; } ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
@@ -419,7 +434,14 @@
     <div><div class="logo-text">VoiceMinutes</div><div class="logo-sub">保育施設向け 音声記録・要点整理ツール</div></div>
   </div>
   <div class="header-right">
-    <span class="badge-plan">v2.2</span>
+    <div class="vocab-dropdown-wrap">
+      <button class="btn-sm" onclick="toggleVocabPanel()">🔤 用語登録</button>
+      <div class="vocab-dropdown-panel" id="vocabDropdownPanel">
+        <div class="vocab-dropdown-title">固有名詞・専門用語（読み違い防止）</div>
+        <div class="vocab-dropdown-desc">💡 人名・施設名・専門用語などをカンマ区切りで入力しておくと、Whisperの認識精度が上がります。</div>
+        <input type="text" class="vocab-input" id="vocabInput" placeholder="例：木村、しおどめ保育園、三郷中央、ヒヤリハット" oninput="saveVocab()">
+      </div>
+    </div>
     <button class="btn-sm" onclick="openSpeakerModal()">👤 話者設定</button>
     
   </div>
@@ -457,25 +479,7 @@
         <button class="btn-sm" onclick="copyTranscript()">コピー</button>
         <button class="btn-sm" onclick="applyReplace()">🔁 話者置換</button>
       </div>
-      <div class="input-mode-tabs">
-        <button class="mode-tab active" onclick="switchInputMode('whisper',this)">🤖 Whisper文字起こし</button>
-        <button class="mode-tab" onclick="switchInputMode('text',this)">✏️ テキスト入力</button>
-      </div><div class="mode-panel" id="panelText">
-        <div class="text-input-row">
-          <div class="text-input-inner">
-            <div class="text-speaker-row"><span>話者：</span>
-              <select class="spk-select" id="textSpkSelect">
-                <option value="0">話者A（右）</option><option value="1">話者B（左）</option>
-                <option value="2">話者C（左）</option><option value="3">話者D（左）</option><option value="4">話者E（左）</option>
-              </select>
-            </div>
-            <textarea class="text-input-ta" id="textInputArea" placeholder="ここにテキストを入力または貼り付け…（Enterで追加、Shift+Enterで改行）" onkeydown="handleTextInputKey(event)"></textarea>
-            <div class="text-hint">💡 長文をまとめて貼り付けると1発言として追加されます。</div>
-          </div>
-          <button class="btn-add-text" onclick="addTextUtterance()">＋ 追加</button>
-        </div>
-      </div>
-      <div class="mode-panel active" id="panelWhisper" class="mode-panel active">
+      <div class="mode-panel active" id="panelWhisper">
 
         <div style="display:none">
           <input type="password" class="whisper-key-input" id="whisperKeyInput">
@@ -680,6 +684,8 @@ async function startRec(){
       fd.append('model','whisper-1');
       fd.append('language','ja');
       fd.append('response_format','text');
+      const vocabPrompt = getVocabPrompt();
+      if(vocabPrompt) fd.append('prompt', vocabPrompt);
 
       const apiKey = localStorage.getItem('vm_openai_key')||'';
       const res = await fetch('https://voiceminutes-proxy.cryk0289.workers.dev/whisper',{
@@ -852,6 +858,8 @@ async function processWhisperFile(file){
     fd.append('language', 'ja');
     fd.append('response_format', 'verbose_json');
     fd.append('timestamp_granularities[]', 'segment');
+    const vocabPrompt2 = getVocabPrompt();
+    if(vocabPrompt2) fd.append('prompt', vocabPrompt2);
 
     try {
       const res = await fetch('https://voiceminutes-proxy.cryk0289.workers.dev/whisper', {
@@ -1044,7 +1052,26 @@ async function exportDocx(){
   }catch(e){showToast('err','❌ Word出力エラー: '+e.message);}
 }
 function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
-function downloadBlob(blob,filename){
+async function downloadBlob(blob,filename){
+  const ext=(filename.split('.').pop()||'').toLowerCase();
+  const mimeMap={txt:'text/plain',html:'text/html',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'};
+  const extLabel={txt:'テキストファイル',html:'HTMLファイル',docx:'Wordファイル'};
+  if(window.showSaveFilePicker){
+    try{
+      const handle=await window.showSaveFilePicker({
+        suggestedName: filename,
+        types:[{description: extLabel[ext]||(ext.toUpperCase()+'ファイル'), accept:{[mimeMap[ext]||blob.type||'application/octet-stream']:['.'+ext]}}]
+      });
+      const writable=await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      showToast('ok','✅ 保存しました：'+filename);
+      return;
+    }catch(e){
+      if(e && e.name==='AbortError'){ return; } // ユーザーがキャンセル
+      // File System Access APIが使えない/失敗した場合は通常ダウンロードにフォールバック
+    }
+  }
   try {
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
@@ -1120,9 +1147,20 @@ function deleteRule(i){const rules=getRules();rules.splice(i,1);saveRules(rules)
 let toastTimer=null;
 function showToast(type,msg){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+type+' show';clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),type==='err'?6000:3500);}
 
+function saveVocab(){localStorage.setItem('vm_vocab', document.getElementById('vocabInput').value);}
+function loadVocab(){const el=document.getElementById('vocabInput'); if(el) el.value = localStorage.getItem('vm_vocab')||'';}
+function getVocabPrompt(){return (localStorage.getItem('vm_vocab')||'').trim();}
+function toggleVocabPanel(){document.getElementById('vocabDropdownPanel').classList.toggle('open');}
+document.addEventListener('click',function(e){
+  const wrap=document.querySelector('.vocab-dropdown-wrap');
+  const panel=document.getElementById('vocabDropdownPanel');
+  if(wrap && panel && panel.classList.contains('open') && !wrap.contains(e.target)) panel.classList.remove('open');
+});
+
 renderHistory();
 
 refreshWhisperKeyStatus();
+loadVocab();
 if(!window.SpeechRecognition&&!window.webkitSpeechRecognition){setTimeout(()=>showToast('err','⚠ このブラウザはリアルタイム文字起こしに非対応です。Chrome / Edge をお使いください'),800);}
 
 // Whisperファイル入力の初期バインド
