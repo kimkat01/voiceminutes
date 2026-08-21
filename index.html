@@ -1017,9 +1017,18 @@ function getExportMeta(){return{now:new Date().toLocaleString('ja-JP'),scene:SCE
 function buildLogText(){return utterances.map(u=>'['+fmtSec(u.ts)+'] 【'+u.label+'】'+u.text).join('\n');}
 function buildSummaryText(){const body=document.getElementById('summaryBody');if(!body)return'';const cards=body.querySelectorAll('.summary-card');if(!cards.length)return'';let out='';cards.forEach(card=>{const title=card.querySelector('.summary-card-title')?.textContent?.trim()||'';out+='\n■ '+title+'\n';card.querySelectorAll('.summary-item').forEach(li=>{out+='  ▸ '+li.textContent.trim()+'\n';});card.querySelectorAll('.todo-item').forEach(item=>{const t=item.querySelector('.todo-text')?.textContent?.trim()||'',a=item.querySelector('.todo-assignee')?.textContent?.trim()||'';out+='  □ '+t+(a?' ('+a+')':'')+'\n';});});return out.trim();}
 
-function exportTxt(){const log=buildLogText();if(!log){showToast('err','会話ログがありません');return;}const{now,scene}=getExportMeta(),sum=buildSummaryText();let c='VoiceMinutes エクスポート\n'+'='.repeat(40)+'\n出力日時：'+now+'\nシーン：'+scene+'\n'+'='.repeat(40)+'\n\n【会話ログ】\n\n'+log+'\n';if(sum)c+='\n\n'+'='.repeat(40)+'\n【AI要点整理】\n\n'+sum+'\n';downloadBlob(new Blob([c],{type:'text/plain;charset=utf-8'}),'VoiceMinutes_'+formatFilename(now)+'.txt');showToast('ok','✅ TXTファイルをダウンロードしました');}
+async function exportTxt(){
+  const log=buildLogText();if(!log){showToast('err','会話ログがありません');return;}
+  const{now,scene}=getExportMeta(),sum=buildSummaryText();
+  let c='VoiceMinutes エクスポート\n'+'='.repeat(40)+'\n出力日時：'+now+'\nシーン：'+scene+'\n'+'='.repeat(40)+'\n\n【会話ログ】\n\n'+log+'\n';
+  if(sum)c+='\n\n'+'='.repeat(40)+'\n【AI要点整理】\n\n'+sum+'\n';
+  const filename='VoiceMinutes_'+formatFilename(now)+'.txt';
+  let handle=null;
+  try{ handle=await pickSaveHandle(filename); }catch(e){ if(e && e.name==='AbortError') return; }
+  await writeBlobToHandle(handle, new Blob([c],{type:'text/plain;charset=utf-8'}), filename);
+}
 
-function exportHtml(){
+async function exportHtml(){
   const log=buildLogText();if(!log){showToast('err','会話ログがありません');return;}
   const{now,scene}=getExportMeta();
   const colors={a:'#4f8ef7',b:'#3ecf8e',c:'#f7c948',d:'#f7615a',e:'#9b6ff7'},bgColors={a:'rgba(79,142,247,0.1)',b:'rgba(62,207,142,0.1)',c:'rgba(247,201,72,0.1)',d:'rgba(247,97,90,0.1)',e:'rgba(155,111,247,0.1)'};
@@ -1027,13 +1036,20 @@ function exportHtml(){
   let sumHtml='';const bodyEl=document.getElementById('summaryBody'),cardColors=['#4f8ef7','#3ecf8e','#f7c948','#9b6ff7'];let ci=0;
   if(bodyEl)bodyEl.querySelectorAll('.summary-card').forEach(card=>{const title=card.querySelector('.summary-card-title')?.textContent?.trim()||'',icon=card.querySelector('.summary-card-icon')?.textContent?.trim()||'';let items='';card.querySelectorAll('.summary-item').forEach(li=>{items+='<li style="font-size:12px;line-height:1.7;padding:4px 0;border-bottom:1px solid #eee;color:#1a1d2e;list-style:none">▸ '+escHtml(li.textContent.trim())+'</li>';});card.querySelectorAll('.todo-item').forEach(item=>{const t=item.querySelector('.todo-text')?.textContent?.trim()||'',a=item.querySelector('.todo-assignee')?.textContent?.trim()||'';items+='<li style="font-size:12px;line-height:1.7;padding:4px 0;border-bottom:1px solid #eee;color:#1a1d2e;list-style:none">□ '+escHtml(t)+(a?' <span style="color:#9aa0b4;font-size:10px">('+escHtml(a)+')</span>':'')+'</li>';});sumHtml+='<div style="background:#fff;border:1px solid #dde1ec;border-radius:10px;padding:12px;margin-bottom:10px;border-top:3px solid '+cardColors[ci%cardColors.length]+'"><div style="font-size:11px;font-weight:700;color:#555e7a;margin-bottom:8px">'+escHtml(icon)+' '+escHtml(title)+'</div><ul style="padding:0;margin:0">'+items+'</ul></div>';ci++;});
   const html='<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>VoiceMinutes - '+escHtml(scene)+'</title><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet"><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:"Noto Sans JP",sans-serif;background:#f4f6fb;padding:20px}.page{max-width:800px;margin:0 auto;background:#fff;border-radius:14px;padding:32px;box-shadow:0 4px 24px rgba(0,0,0,.08)}.hd{border-bottom:3px solid #2f6fe0;padding-bottom:16px;margin-bottom:24px}.logo{font-size:18px;font-weight:700;color:#2f6fe0}.meta{font-size:12px;color:#9aa0b4;margin-top:4px}.sec-title{font-size:13px;font-weight:700;color:#555e7a;text-transform:uppercase;letter-spacing:.8px;margin-bottom:14px;padding-bottom:6px;border-bottom:2px solid #eef1f7}.sec{margin-bottom:28px}@media print{body{background:#fff;padding:0}.page{box-shadow:none;border-radius:0}}</style></head><body><div class="page"><div class="hd"><div class="logo">🎙 VoiceMinutes</div><div class="meta">シーン：'+escHtml(scene)+'　|　出力日時：'+escHtml(now)+'　|　発言数：'+utterances.length+'件</div></div><div class="sec"><div class="sec-title">💬 会話ログ</div>'+bubblesHtml+'</div>'+(sumHtml?'<div class="sec"><div class="sec-title">✨ AI要点整理</div>'+sumHtml+'</div>':'')+'</div></body></html>';
-  downloadBlob(new Blob([html],{type:'text/html;charset=utf-8'}),'VoiceMinutes_'+formatFilename(now)+'.html');showToast('ok','✅ HTMLをダウンロード。ブラウザで開き「印刷→PDFに保存」でPDF化できます');
+  const filename='VoiceMinutes_'+formatFilename(now)+'.html';
+  let handle=null;
+  try{ handle=await pickSaveHandle(filename); }catch(e){ if(e && e.name==='AbortError') return; }
+  await writeBlobToHandle(handle, new Blob([html],{type:'text/html;charset=utf-8'}), filename);
+  showToast('ok','💡 ブラウザで開き「印刷→PDFに保存」でPDF化できます');
 }
 
 async function exportDocx(){
   const log=buildLogText();if(!log){showToast('err','会話ログがありません');return;}
-  if(typeof docx==='undefined'){showToast('ok','📦 Word出力ライブラリを読み込み中…');await loadScript('https://unpkg.com/docx@8.5.0/build/index.js');}
   const{now,scene}=getExportMeta();
+  const filename='VoiceMinutes_'+formatFilename(now)+'.docx';
+  let handle=null;
+  try{ handle=await pickSaveHandle(filename); }catch(e){ if(e && e.name==='AbortError') return; }
+  if(typeof docx==='undefined'){showToast('ok','📦 Word出力ライブラリを読み込み中…');await loadScript('https://unpkg.com/docx@8.5.0/build/index.js');}
   try{
     const{Document,Packer,Paragraph,TextRun,HeadingLevel}=docx;
     const children=[];
@@ -1048,28 +1064,31 @@ async function exportDocx(){
       if(bodyEl)bodyEl.querySelectorAll('.summary-card').forEach(card=>{const title=card.querySelector('.summary-card-title')?.textContent?.trim()||'',icon=card.querySelector('.summary-card-icon')?.textContent?.trim()||'';children.push(new Paragraph({children:[new TextRun({text:icon+' '+title,size:22,bold:true,color:'2F6FE0'})],spacing:{before:200,after:100}}));card.querySelectorAll('.summary-item').forEach(li=>{children.push(new Paragraph({children:[new TextRun({text:'▸ '+li.textContent.trim(),size:20})],indent:{left:360},spacing:{after:60}}));});card.querySelectorAll('.todo-item').forEach(item=>{const t=item.querySelector('.todo-text')?.textContent?.trim()||'',a=item.querySelector('.todo-assignee')?.textContent?.trim()||'';children.push(new Paragraph({children:[new TextRun({text:'☐ '+t,size:20}),...(a?[new TextRun({text:' ('+a+')',size:18,color:'9AA0B4'})]:[])],indent:{left:360},spacing:{after:60}}));});});
     }
     const doc=new Document({creator:'VoiceMinutes',title:'VoiceMinutes - '+scene,sections:[{properties:{},children}]});
-    const buf=await Packer.toBlob(doc);downloadBlob(buf,'VoiceMinutes_'+formatFilename(now)+'.docx');showToast('ok','✅ Wordファイルをダウンロードしました');
+    const buf=await Packer.toBlob(doc);
+    await writeBlobToHandle(handle, buf, filename);
   }catch(e){showToast('err','❌ Word出力エラー: '+e.message);}
 }
 function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
-async function downloadBlob(blob,filename){
+async function pickSaveHandle(filename){
+  if(!window.showSaveFilePicker) return null;
   const ext=(filename.split('.').pop()||'').toLowerCase();
   const mimeMap={txt:'text/plain',html:'text/html',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'};
   const extLabel={txt:'テキストファイル',html:'HTMLファイル',docx:'Wordファイル'};
-  if(window.showSaveFilePicker){
+  return await window.showSaveFilePicker({
+    suggestedName: filename,
+    types:[{description: extLabel[ext]||(ext.toUpperCase()+'ファイル'), accept:{[mimeMap[ext]||'application/octet-stream']:['.'+ext]}}]
+  });
+}
+async function writeBlobToHandle(handle, blob, filename){
+  if(handle){
     try{
-      const handle=await window.showSaveFilePicker({
-        suggestedName: filename,
-        types:[{description: extLabel[ext]||(ext.toUpperCase()+'ファイル'), accept:{[mimeMap[ext]||blob.type||'application/octet-stream']:['.'+ext]}}]
-      });
       const writable=await handle.createWritable();
       await writable.write(blob);
       await writable.close();
       showToast('ok','✅ 保存しました：'+filename);
       return;
     }catch(e){
-      if(e && e.name==='AbortError'){ return; } // ユーザーがキャンセル
-      // File System Access APIが使えない/失敗した場合は通常ダウンロードにフォールバック
+      // 書き込み失敗時は通常ダウンロードにフォールバック
     }
   }
   try {
