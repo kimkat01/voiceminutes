@@ -340,8 +340,8 @@
   .btn-modal.cancel { background: var(--surface2); color: var(--text2); border: 1.5px solid var(--border2); }
   .btn-modal.save { background: linear-gradient(135deg, #2b6ee2, #6aa0ff); color: #fff; box-shadow: 0 2px 10px rgba(43,110,226,0.28); }
   .btn-modal:hover { transform: translateY(-1px); filter: brightness(1.06); }
-  .toast { position: fixed; bottom: 22px; right: 22px; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 12px 18px; font-size: 13px; color: var(--text); box-shadow: var(--shadow-lg); transform: translateY(16px); opacity: 0; transition: all 0.25s; z-index: 300; display: flex; align-items: center; gap: 9px; max-width: 330px; }
-  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast { position: fixed; bottom: 22px; right: 22px; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 12px 18px; font-size: 13px; color: var(--text); box-shadow: var(--shadow-lg); transform: translateY(16px); opacity: 0; transition: all 0.25s; z-index: 300; display: flex; align-items: center; gap: 9px; max-width: 330px; pointer-events: none; }
+  .toast.show { transform: translateY(0); opacity: 1; pointer-events: auto; }
   .toast.ok  { border-left: 4px solid var(--green); }
   .toast.err { border-left: 4px solid var(--red); }
   .spinner { width: 13px; height: 13px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; animation: spin 0.7s linear infinite; flex-shrink: 0; }
@@ -21285,7 +21285,12 @@ function showToast(type,msg){const t=document.getElementById('toast');t.textCont
 
 function saveVocab(){localStorage.setItem('vm_vocab', document.getElementById('vocabInput').value);}
 function loadVocab(){const el=document.getElementById('vocabInput'); if(el) el.value = localStorage.getItem('vm_vocab')||'';}
-function getVocabPrompt(){return (localStorage.getItem('vm_vocab')||'').trim();}
+function getVocabPrompt(){
+  const words=(localStorage.getItem('vm_vocab')||'').trim();
+  let base='これは日本語の保育施設内での会話です。句読点（、や。）を適切に使い、自然な日本語の文章として書き起こしてください。';
+  if(words) base+=' 次の固有名詞や専門用語が登場する場合があります：'+words+'。';
+  return base;
+}
 function toggleVocabPanel(){document.getElementById('vocabDropdownPanel').classList.toggle('open');}
 document.addEventListener('click',function(e){
   const wrap=document.querySelector('.vocab-dropdown-wrap');
