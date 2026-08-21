@@ -20828,7 +20828,8 @@ async function startRec(){
       const parsed = (() => { try{ const d=JSON.parse(text); return d.error?'':d.text||text; }catch{ return text; } })();
 
       if(parsed && parsed.trim()) {
-        addUtterance(normalizeJaPunctuation(parsed.trim()), segStart);
+        const punctuated = await punctuateText(parsed.trim());
+        addUtterance(punctuated, segStart);
         updateTranscriptUI();
       }
     } catch(e) {
@@ -21019,7 +21020,7 @@ async function processWhisperFile(file){
           if (j > 0 && gap >= GAP_SEC) {
             if (group.length > 0) {
               currentSpeakerIdx = speakerIdx;
-              addUtterance(normalizeJaPunctuation(group.join('')), groupStart);
+              addUtterance(await punctuateText(group.join('')), groupStart);
               group = [];
             }
             speakerIdx = 1 - speakerIdx;
@@ -21030,10 +21031,10 @@ async function processWhisperFile(file){
         }
         if (group.length > 0) {
           currentSpeakerIdx = speakerIdx;
-          addUtterance(normalizeJaPunctuation(group.join('')), groupStart);
+          addUtterance(await punctuateText(group.join('')), groupStart);
         }
       } else if (data.text && data.text.trim()) {
-        addUtterance(normalizeJaPunctuation(data.text.trim()), Math.round(chunkStart));
+        addUtterance(await punctuateText(data.text.trim()), Math.round(chunkStart));
       }
 
       updateTranscriptUI();
@@ -21274,9 +21275,33 @@ function loadVocab(){const el=document.getElementById('vocabInput'); if(el) el.v
 function normalizeJaPunctuation(t){
   t=(t||'').trim();
   if(!t) return t;
-  // 文末に句読点がなければ「。」を補う（Whisperが句読点を落とした場合の保険）
+  // 文末に句読点がなければ「。」を補う（最低限の保険）
   if(!/[。！？…」』）\.\?!]$/.test(t)) t+='。';
   return t;
+}
+async function punctuateText(text){
+  text=(text||'').trim();
+  if(!text) return text;
+  const apiKey=localStorage.getItem('vm_apikey')||'';
+  if(!apiKey) return normalizeJaPunctuation(text); // Anthropicキー未設定時は文末補完のみ
+  try{
+    const res=await fetch('https://voiceminutes-proxy.cryk0289.workers.dev/claude',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Anthropic-Key':apiKey},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-6',
+        max_tokens:500,
+        system:'あなたは日本語の文字起こしテキストに句読点を追加する専門家です。入力された文章の言葉遣い・語順・内容は一切変えず、読点（、）と句点（。）だけを自然な位置に追加してください。前置きや説明は不要です。修正後の文章のみをそのまま出力してください。',
+        messages:[{role:'user',content:text}]
+      })
+    });
+    if(!res.ok) return normalizeJaPunctuation(text);
+    const data=await res.json();
+    const out=(data.content && data.content[0] && data.content[0].text || '').trim();
+    return out ? normalizeJaPunctuation(out) : normalizeJaPunctuation(text);
+  }catch(e){
+    return normalizeJaPunctuation(text);
+  }
 }
 function getVocabPrompt(){
   const words=(localStorage.getItem('vm_vocab')||'').trim();
