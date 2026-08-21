@@ -209,6 +209,9 @@
   .spk-c .spk-name { color: var(--spk-c); } .spk-d .spk-name { color: var(--spk-d); }
   .spk-e .spk-name { color: var(--spk-e); }
   .bubble-text { padding: 10px 14px; border-radius: 18px; font-size: 13px; line-height: 1.7; color: var(--text); word-break: break-all; box-shadow: var(--shadow-sm); }
+  .bubble-text[contenteditable="true"] { cursor: text; outline: none; transition: box-shadow 0.15s; }
+  .bubble-text[contenteditable="true"]:hover { box-shadow: 0 0 0 1.5px var(--accent2) inset; }
+  .bubble-text[contenteditable="true"]:focus { box-shadow: 0 0 0 2px var(--accent) inset; }
   .bubble-row:not(.right) .bubble-text { border-bottom-left-radius: 5px; }
   .bubble-row.right .bubble-text { border-bottom-right-radius: 5px; }
   .spk-a .bubble-text { background: var(--spk-a-bg); border: 1.5px solid rgba(43,110,226,0.20); }
@@ -20615,7 +20618,7 @@ var __async = (__this, __arguments, generator) => {
     </div>
     <div class="transcript-area">
       <div class="transcript-header">
-        <span class="transcript-label">💬 会話ログ</span>
+        <span class="transcript-label" style="display:flex;align-items:center;gap:8px;">💬 会話ログ<span style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:normal;">（タップして編集可）</span></span>
         <div class="transcript-actions">
           <span class="transcript-count" id="charCount">0 発言</span>
           <button class="btn-sm" onclick="cycleSpeaker()">👤 話者切替</button>
@@ -20727,7 +20730,17 @@ function fmtSec(s){return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%
 function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function cycleSpeaker(){currentSpeakerIdx=(currentSpeakerIdx+1)%SPEAKERS.length;showToast('ok','👤 話者を「'+SPEAKERS[currentSpeakerIdx].label+'」に切り替えました');}
 function addUtterance(text,tsOverride){const spk=SPEAKERS[currentSpeakerIdx],ts=tsOverride!==undefined?tsOverride:timerSec;utterances.push({speaker:spk.id,label:spk.label,icon:spk.icon,side:spk.side,text,ts});renderBubbles();updateCharCount();}
-function renderBubbles(){const feed=document.getElementById('bubbleFeed');if(!utterances.length){feed.innerHTML='<div class="bubble-empty">録音を開始すると<br>ここに会話が表示されます</div>';return;}feed.innerHTML=utterances.map(u=>`<div class="bubble-row ${u.side} spk-${u.speaker}"><div class="spk-icon">${u.icon}</div><div class="bubble-body"><div class="spk-name">${escHtml(u.label)}</div><div class="bubble-text">${escHtml(u.text)}</div><div class="bubble-ts">${fmtSec(u.ts)}</div></div></div>`).join('');feed.scrollTop=feed.scrollHeight;}
+function renderBubbles(){const feed=document.getElementById('bubbleFeed');if(!utterances.length){feed.innerHTML='<div class="bubble-empty">録音を開始すると<br>ここに会話が表示されます</div>';return;}feed.innerHTML=utterances.map((u,i)=>`<div class="bubble-row ${u.side} spk-${u.speaker}"><div class="spk-icon">${u.icon}</div><div class="bubble-body"><div class="spk-name">${escHtml(u.label)}</div><div class="bubble-text" contenteditable="true" spellcheck="false" data-idx="${i}" onblur="saveBubbleEdit(this)">${escHtml(u.text)}</div><div class="bubble-ts">${fmtSec(u.ts)}</div></div></div>`).join('');feed.scrollTop=feed.scrollHeight;}
+function saveBubbleEdit(el){
+  const idx=parseInt(el.dataset.idx,10);
+  if(isNaN(idx)||!utterances[idx]) return;
+  const newText=el.textContent.trim();
+  if(!newText){ el.textContent=utterances[idx].text; return; }
+  if(newText!==utterances[idx].text){
+    utterances[idx].text=newText;
+    updateTranscriptUI();
+  }
+}
 function updateCharCount(){document.getElementById('charCount').textContent=utterances.length+' 発言';}
 function updateTranscriptUI(){
   fullTranscript=utterances.map(u=>'【'+u.label+'】'+u.text).join('\n');
