@@ -20815,7 +20815,7 @@ async function startRec(){
       const parsed = (() => { try{ const d=JSON.parse(text); return d.error?'':d.text||text; }catch{ return text; } })();
 
       if(parsed && parsed.trim()) {
-        addUtterance(parsed.trim(), segStart);
+        addUtterance(normalizeJaPunctuation(parsed.trim()), segStart);
         updateTranscriptUI();
       }
     } catch(e) {
@@ -21006,7 +21006,7 @@ async function processWhisperFile(file){
           if (j > 0 && gap >= GAP_SEC) {
             if (group.length > 0) {
               currentSpeakerIdx = speakerIdx;
-              addUtterance(group.join(''), groupStart);
+              addUtterance(normalizeJaPunctuation(group.join('')), groupStart);
               group = [];
             }
             speakerIdx = 1 - speakerIdx;
@@ -21017,10 +21017,10 @@ async function processWhisperFile(file){
         }
         if (group.length > 0) {
           currentSpeakerIdx = speakerIdx;
-          addUtterance(group.join(''), groupStart);
+          addUtterance(normalizeJaPunctuation(group.join('')), groupStart);
         }
       } else if (data.text && data.text.trim()) {
-        addUtterance(data.text.trim(), Math.round(chunkStart));
+        addUtterance(normalizeJaPunctuation(data.text.trim()), Math.round(chunkStart));
       }
 
       updateTranscriptUI();
@@ -21141,9 +21141,7 @@ async function exportTxt(){
   let c='VoiceMinutes エクスポート\n'+'='.repeat(40)+'\n出力日時：'+now+'\nシーン：'+scene+'\n'+'='.repeat(40)+'\n\n【会話ログ】\n\n'+log+'\n';
   if(sum)c+='\n\n'+'='.repeat(40)+'\n【AI要点整理】\n\n'+sum+'\n';
   const filename='VoiceMinutes_'+formatFilename(now)+'.txt';
-  let handle=null;
-  try{ handle=await pickSaveHandle(filename); }catch(e){ if(e && e.name==='AbortError') return; }
-  await writeBlobToHandle(handle, new Blob([c],{type:'text/plain;charset=utf-8'}), filename);
+  downloadBlob(new Blob([c],{type:'text/plain;charset=utf-8'}), filename);
 }
 
 async function exportHtml(){
@@ -21155,10 +21153,8 @@ async function exportHtml(){
   if(bodyEl)bodyEl.querySelectorAll('.summary-card').forEach(card=>{const title=card.querySelector('.summary-card-title')?.textContent?.trim()||'',icon=card.querySelector('.summary-card-icon')?.textContent?.trim()||'';let items='';card.querySelectorAll('.summary-item').forEach(li=>{items+='<li style="font-size:12px;line-height:1.7;padding:4px 0;border-bottom:1px solid #eee;color:#1a1d2e;list-style:none">▸ '+escHtml(li.textContent.trim())+'</li>';});card.querySelectorAll('.todo-item').forEach(item=>{const t=item.querySelector('.todo-text')?.textContent?.trim()||'',a=item.querySelector('.todo-assignee')?.textContent?.trim()||'';items+='<li style="font-size:12px;line-height:1.7;padding:4px 0;border-bottom:1px solid #eee;color:#1a1d2e;list-style:none">□ '+escHtml(t)+(a?' <span style="color:#9aa0b4;font-size:10px">('+escHtml(a)+')</span>':'')+'</li>';});sumHtml+='<div style="background:#fff;border:1px solid #dde1ec;border-radius:10px;padding:12px;margin-bottom:10px;border-top:3px solid '+cardColors[ci%cardColors.length]+'"><div style="font-size:11px;font-weight:700;color:#555e7a;margin-bottom:8px">'+escHtml(icon)+' '+escHtml(title)+'</div><ul style="padding:0;margin:0">'+items+'</ul></div>';ci++;});
   const html='<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>VoiceMinutes - '+escHtml(scene)+'</title><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet"><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:"Noto Sans JP",sans-serif;background:#f4f6fb;padding:20px}.page{max-width:800px;margin:0 auto;background:#fff;border-radius:14px;padding:32px;box-shadow:0 4px 24px rgba(0,0,0,.08)}.hd{border-bottom:3px solid #2f6fe0;padding-bottom:16px;margin-bottom:24px}.logo{font-size:18px;font-weight:700;color:#2f6fe0}.meta{font-size:12px;color:#9aa0b4;margin-top:4px}.sec-title{font-size:13px;font-weight:700;color:#555e7a;text-transform:uppercase;letter-spacing:.8px;margin-bottom:14px;padding-bottom:6px;border-bottom:2px solid #eef1f7}.sec{margin-bottom:28px}@media print{body{background:#fff;padding:0}.page{box-shadow:none;border-radius:0}}</style></head><body><div class="page"><div class="hd"><div class="logo">🎙 VoiceMinutes</div><div class="meta">シーン：'+escHtml(scene)+'　|　出力日時：'+escHtml(now)+'　|　発言数：'+utterances.length+'件</div></div><div class="sec"><div class="sec-title">💬 会話ログ</div>'+bubblesHtml+'</div>'+(sumHtml?'<div class="sec"><div class="sec-title">✨ AI要点整理</div>'+sumHtml+'</div>':'')+'</div></body></html>';
   const filename='VoiceMinutes_'+formatFilename(now)+'.html';
-  let handle=null;
-  try{ handle=await pickSaveHandle(filename); }catch(e){ if(e && e.name==='AbortError') return; }
-  await writeBlobToHandle(handle, new Blob([html],{type:'text/html;charset=utf-8'}), filename);
-  showToast('ok','💡 ブラウザで開き「印刷→PDFに保存」でPDF化できます');
+  downloadBlob(new Blob([html],{type:'text/html;charset=utf-8'}), filename);
+  setTimeout(()=>showToast('ok','💡 ブラウザで開き「印刷→PDFに保存」でPDF化できます'), 1800);
 }
 
 async function exportDocx(){
@@ -21166,15 +21162,13 @@ async function exportDocx(){
   if(typeof docx==='undefined'){showToast('err','❌ Word出力ライブラリの読み込みに失敗しました');return;}
   const{now,scene}=getExportMeta();
   const filename='VoiceMinutes_'+formatFilename(now)+'.docx';
-  let handle=null;
-  try{ handle=await pickSaveHandle(filename); }catch(e){ if(e && e.name==='AbortError') return; }
   try{
     const{Document,Packer,Paragraph,TextRun,HeadingLevel}=docx;
     const children=[];
     children.push(new Paragraph({text:'VoiceMinutes 記録',heading:HeadingLevel.HEADING_1,spacing:{after:120}}));
     children.push(new Paragraph({children:[new TextRun({text:'シーン：'+scene+'　|　出力日時：'+now+'　|　発言数：'+utterances.length+'件',size:18,color:'9AA0B4'})],spacing:{after:300}}));
     children.push(new Paragraph({text:'会話ログ',heading:HeadingLevel.HEADING_2,spacing:{before:200,after:150}}));
-    utterances.forEach(u=>{children.push(new Paragraph({children:[new TextRun({text:'['+fmtSec(u.ts)+'] ',size:18,color:'9AA0B4',font:'Courier New'}),new TextRun({text:'【'+u.label+'】',size:20,bold:true}),new TextRun({text:u.text,size:20})],spacing:{after:80},indent:u.side==='right'?{left:2000}:{left:200}}));});
+    utterances.forEach(u=>{children.push(new Paragraph({children:[new TextRun({text:'['+fmtSec(u.ts)+'] ',size:18,color:'9AA0B4',font:'Courier New'}),new TextRun({text:'【'+u.label+'】',size:20,bold:true}),new TextRun({text:u.text,size:20})],spacing:{after:80}}));});
     const sumText=buildSummaryText();
     if(sumText){
       children.push(new Paragraph({text:'AI要点整理',heading:HeadingLevel.HEADING_2,spacing:{before:400,after:150}}));
@@ -21183,31 +21177,10 @@ async function exportDocx(){
     }
     const doc=new Document({creator:'VoiceMinutes',title:'VoiceMinutes - '+scene,sections:[{properties:{},children}]});
     const buf=await Packer.toBlob(doc);
-    await writeBlobToHandle(handle, buf, filename);
+    downloadBlob(buf, filename);
   }catch(e){showToast('err','❌ Word出力エラー: '+e.message);}
 }
-async function pickSaveHandle(filename){
-  if(!window.showSaveFilePicker) return null;
-  const ext=(filename.split('.').pop()||'').toLowerCase();
-  const mimeMap={txt:'text/plain',html:'text/html',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'};
-  const extLabel={txt:'テキストファイル',html:'HTMLファイル',docx:'Wordファイル'};
-  return await window.showSaveFilePicker({
-    suggestedName: filename,
-    types:[{description: extLabel[ext]||(ext.toUpperCase()+'ファイル'), accept:{[mimeMap[ext]||'application/octet-stream']:['.'+ext]}}]
-  });
-}
-async function writeBlobToHandle(handle, blob, filename){
-  if(handle){
-    try{
-      const writable=await handle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-      showToast('ok','✅ 保存しました：'+filename);
-      return;
-    }catch(e){
-      // 書き込み失敗時は通常ダウンロードにフォールバック
-    }
-  }
+function downloadBlob(blob,filename){
   try {
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
@@ -21216,7 +21189,7 @@ async function writeBlobToHandle(handle, blob, filename){
     document.body.appendChild(a);
     a.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window}));
     setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},2000);
-    showToast('ok','✅ ダウンロードしました：'+filename);
+    showToast('ok','✅ ダウンロードしました：'+filename+'（保存先：ダウンロードフォルダ）');
   } catch(e) {
     showToast('err','❌ ダウンロードエラー: '+e.message);
   }
@@ -21285,6 +21258,13 @@ function showToast(type,msg){const t=document.getElementById('toast');t.textCont
 
 function saveVocab(){localStorage.setItem('vm_vocab', document.getElementById('vocabInput').value);}
 function loadVocab(){const el=document.getElementById('vocabInput'); if(el) el.value = localStorage.getItem('vm_vocab')||'';}
+function normalizeJaPunctuation(t){
+  t=(t||'').trim();
+  if(!t) return t;
+  // 文末に句読点がなければ「。」を補う（Whisperが句読点を落とした場合の保険）
+  if(!/[。！？…」』）\.\?!]$/.test(t)) t+='。';
+  return t;
+}
 function getVocabPrompt(){
   const words=(localStorage.getItem('vm_vocab')||'').trim();
   let base='これは日本語の保育施設内での会話です。句読点（、や。）を適切に使い、自然な日本語の文章として書き起こしてください。';
