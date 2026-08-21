@@ -21155,7 +21155,7 @@ async function exportTxt(){
   let c='VoiceMinutes エクスポート\n'+'='.repeat(40)+'\n出力日時：'+now+'\nシーン：'+scene+'\n'+'='.repeat(40)+'\n\n【会話ログ】\n\n'+log+'\n';
   if(sum)c+='\n\n'+'='.repeat(40)+'\n【AI要点整理】\n\n'+sum+'\n';
   const filename='VoiceMinutes_'+formatFilename(now)+'.txt';
-  downloadBlob(new Blob([c],{type:'text/plain;charset=utf-8'}), filename);
+  await saveOrDownload(new Blob([c],{type:'text/plain;charset=utf-8'}), filename);
 }
 
 async function exportHtml(){
@@ -21167,7 +21167,7 @@ async function exportHtml(){
   if(bodyEl)bodyEl.querySelectorAll('.summary-card').forEach(card=>{const title=card.querySelector('.summary-card-title')?.textContent?.trim()||'',icon=card.querySelector('.summary-card-icon')?.textContent?.trim()||'';let items='';card.querySelectorAll('.summary-item').forEach(li=>{items+='<li style="font-size:12px;line-height:1.7;padding:4px 0;border-bottom:1px solid #eee;color:#1a1d2e;list-style:none">▸ '+escHtml(li.textContent.trim())+'</li>';});card.querySelectorAll('.todo-item').forEach(item=>{const t=item.querySelector('.todo-text')?.textContent?.trim()||'',a=item.querySelector('.todo-assignee')?.textContent?.trim()||'';items+='<li style="font-size:12px;line-height:1.7;padding:4px 0;border-bottom:1px solid #eee;color:#1a1d2e;list-style:none">□ '+escHtml(t)+(a?' <span style="color:#9aa0b4;font-size:10px">('+escHtml(a)+')</span>':'')+'</li>';});sumHtml+='<div style="background:#fff;border:1px solid #dde1ec;border-radius:10px;padding:12px;margin-bottom:10px;border-top:3px solid '+cardColors[ci%cardColors.length]+'"><div style="font-size:11px;font-weight:700;color:#555e7a;margin-bottom:8px">'+escHtml(icon)+' '+escHtml(title)+'</div><ul style="padding:0;margin:0">'+items+'</ul></div>';ci++;});
   const html='<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>VoiceMinutes - '+escHtml(scene)+'</title><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet"><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:"Noto Sans JP",sans-serif;background:#f4f6fb;padding:20px}.page{max-width:800px;margin:0 auto;background:#fff;border-radius:14px;padding:32px;box-shadow:0 4px 24px rgba(0,0,0,.08)}.hd{border-bottom:3px solid #2f6fe0;padding-bottom:16px;margin-bottom:24px}.logo{font-size:18px;font-weight:700;color:#2f6fe0}.meta{font-size:12px;color:#9aa0b4;margin-top:4px}.sec-title{font-size:13px;font-weight:700;color:#555e7a;text-transform:uppercase;letter-spacing:.8px;margin-bottom:14px;padding-bottom:6px;border-bottom:2px solid #eef1f7}.sec{margin-bottom:28px}@media print{body{background:#fff;padding:0}.page{box-shadow:none;border-radius:0}}</style></head><body><div class="page"><div class="hd"><div class="logo">🎙 VoiceMinutes</div><div class="meta">シーン：'+escHtml(scene)+'　|　出力日時：'+escHtml(now)+'　|　発言数：'+utterances.length+'件</div></div><div class="sec"><div class="sec-title">💬 会話ログ</div>'+bubblesHtml+'</div>'+(sumHtml?'<div class="sec"><div class="sec-title">✨ AI要点整理</div>'+sumHtml+'</div>':'')+'</div></body></html>';
   const filename='VoiceMinutes_'+formatFilename(now)+'.html';
-  downloadBlob(new Blob([html],{type:'text/html;charset=utf-8'}), filename);
+  await saveOrDownload(new Blob([html],{type:'text/html;charset=utf-8'}), filename);
   setTimeout(()=>showToast('ok','💡 ブラウザで開き「印刷→PDFに保存」でPDF化できます'), 1800);
 }
 
@@ -21176,6 +21176,8 @@ async function exportDocx(){
   if(typeof docx==='undefined'){showToast('err','❌ Word出力ライブラリの読み込みに失敗しました');return;}
   const{now,scene}=getExportMeta();
   const filename='VoiceMinutes_'+formatFilename(now)+'.docx';
+  let handle=null;
+  try{ handle=await pickSaveHandle(filename); }catch(e){ if(e && e.name==='AbortError') return; }
   try{
     const{Document,Packer,Paragraph,TextRun,HeadingLevel}=docx;
     const children=[];
@@ -21191,8 +21193,37 @@ async function exportDocx(){
     }
     const doc=new Document({creator:'VoiceMinutes',title:'VoiceMinutes - '+scene,sections:[{properties:{},children}]});
     const buf=await Packer.toBlob(doc);
-    downloadBlob(buf, filename);
+    await writeToHandleOrDownload(handle, buf, filename);
   }catch(e){showToast('err','❌ Word出力エラー: '+e.message);}
+}
+async function pickSaveHandle(filename){
+  if(!window.showSaveFilePicker) return null;
+  const ext=(filename.split('.').pop()||'').toLowerCase();
+  const mimeMap={txt:'text/plain',html:'text/html',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'};
+  const extLabel={txt:'テキストファイル',html:'HTMLファイル',docx:'Wordファイル'};
+  return await window.showSaveFilePicker({
+    suggestedName: filename,
+    types:[{description: extLabel[ext]||(ext.toUpperCase()+'ファイル'), accept:{[mimeMap[ext]||'application/octet-stream']:['.'+ext]}}]
+  });
+}
+async function writeToHandleOrDownload(handle, blob, filename){
+  if(handle){
+    try{
+      const writable=await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      showToast('ok','✅ 保存しました：'+filename);
+      return;
+    }catch(e){
+      // 書き込み失敗時は通常ダウンロードにフォールバック
+    }
+  }
+  downloadBlob(blob, filename);
+}
+async function saveOrDownload(blob,filename){
+  let handle=null;
+  try{ handle=await pickSaveHandle(filename); }catch(e){ if(e && e.name==='AbortError') return; }
+  await writeToHandleOrDownload(handle, blob, filename);
 }
 function downloadBlob(blob,filename){
   try {
