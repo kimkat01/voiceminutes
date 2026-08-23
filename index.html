@@ -20954,7 +20954,7 @@ async function processWhisperFile(file){
 
   let audioBuf;
   const TARGET_SR = 16000;       // 16kHz
-  const CHUNK_MIN = 10;          // 10分ごとに分割
+  const CHUNK_MIN = 1.5;         // 1.5分ごとに分割（幻覚が起きても被害を最小限にするため短め）
   const CHUNK_SEC = CHUNK_MIN * 60;
 
   // ── Step1: デコード ──
