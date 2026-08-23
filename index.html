@@ -20784,17 +20784,21 @@ async function startRec(){
   mediaRecorder.ondataavailable = e => { if(e.data && e.data.size>0) audioChunks.push(e.data); };
 
   mediaRecorder.onstop = async () => {
-    if (!audioChunks.length) return;
-    const blob = new Blob(audioChunks, {type: mediaRecorder.mimeType||'audio/webm'});
-    audioChunks = [];
     const segStart = whisperSegmentStart;
     whisperSegmentStart = timerSec;
-
-    // インジケーター表示
     const interim = document.getElementById('interimBar');
-    interim.textContent = '🔄 Whisperで文字起こし中…';
 
     try {
+      if (!audioChunks.length) {
+        console.log('録音データが空でした（chunk skip）');
+        return; // 次のセグメントは finally で必ず再開される
+      }
+      const blob = new Blob(audioChunks, {type: mediaRecorder.mimeType||'audio/webm'});
+      audioChunks = [];
+
+      // インジケーター表示
+      interim.textContent = '🔄 Whisperで文字起こし中…';
+
       const TARGET_SR = 16000;
       const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
       const arrayBuf = await blob.arrayBuffer();
