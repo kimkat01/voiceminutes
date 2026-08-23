@@ -20808,13 +20808,20 @@ async function startRec(){
       src.connect(offCtx.destination);
       src.start();
       const rendered = await offCtx.startRendering();
+
+      // 無音チェック：ほぼ無音ならWhisperに送らずスキップ（幻覚防止）
+      if(computeRMS(rendered) < SILENCE_RMS_THRESHOLD){
+        return;
+      }
+
       const wavBlob = audioBufferToWav(rendered);
 
       const fd = new FormData();
       fd.append('file', new File([wavBlob],'mic_chunk.wav',{type:'audio/wav'}), 'mic_chunk.wav');
       fd.append('model','whisper-1');
       fd.append('language','ja');
-      fd.append('response_format','text');
+      fd.append('response_format','verbose_json');
+      fd.append('timestamp_granularities[]','segment');
       const vocabPrompt = getVocabPrompt();
       if(vocabPrompt) fd.append('prompt', vocabPrompt);
 
@@ -20825,10 +20832,20 @@ async function startRec(){
         body:fd
       });
       const text = await res.text();
-      const parsed = (() => { try{ const d=JSON.parse(text); return d.error?'':d.text||text; }catch{ return text; } })();
+      const data = (() => { try{ return JSON.parse(text); }catch{ return null; } })();
 
-      if(parsed && parsed.trim()) {
-        const punctuated = await punctuateText(parsed.trim());
+      let joined = '';
+      if(data && !data.error){
+        if(data.segments && data.segments.length>0){
+          joined = data.segments.filter(seg=>!isHallucinatedSegment(seg)).map(s=>s.text.trim()).join('');
+        } else if(data.text){
+          joined = data.text.trim();
+        }
+      }
+      joined = collapseRepetition(joined);
+
+      if(joined && joined.trim() && !isHallucinationText(joined.trim())) {
+        const punctuated = await punctuateText(joined.trim());
         addUtterance(punctuated, segStart);
         updateTranscriptUI();
       }
@@ -20983,6 +21000,11 @@ async function processWhisperFile(file){
       continue;
     }
 
+    // このチャンクが丸ごと無音ならWhisperに送らずスキップ（幻覚防止・コスト削減）
+    if(computeRMS(rendered) < SILENCE_RMS_THRESHOLD){
+      continue;
+    }
+
     const wavBlob = audioBufferToWav(rendered);
     const fd = new FormData();
     fd.append('file', new File([wavBlob], 'chunk_' + i + '.wav', {type:'audio/wav'}), 'chunk_' + i + '.wav');
@@ -21020,21 +21042,24 @@ async function processWhisperFile(file){
           if (j > 0 && gap >= GAP_SEC) {
             if (group.length > 0) {
               currentSpeakerIdx = speakerIdx;
-              addUtterance(await punctuateText(group.join('')), groupStart);
+              const g=collapseRepetition(group.join(''));
+              if(g) addUtterance(await punctuateText(g), groupStart);
               group = [];
             }
             speakerIdx = 1 - speakerIdx;
             groupStart = Math.round(chunkStart + seg.start);
           }
-          group.push(seg.text.trim());
+          if(!isHallucinatedSegment(seg)) group.push(seg.text.trim());
           prevEnd = seg.end;
         }
         if (group.length > 0) {
           currentSpeakerIdx = speakerIdx;
-          addUtterance(await punctuateText(group.join('')), groupStart);
+          const g=collapseRepetition(group.join(''));
+          if(g) addUtterance(await punctuateText(g), groupStart);
         }
       } else if (data.text && data.text.trim()) {
-        addUtterance(await punctuateText(data.text.trim()), Math.round(chunkStart));
+        const g=collapseRepetition(data.text.trim());
+        if(g && !isHallucinationText(g)) addUtterance(await punctuateText(g), Math.round(chunkStart));
       }
 
       updateTranscriptUI();
@@ -21333,6 +21358,42 @@ async function punctuateText(text){
   }catch(e){
     return normalizeJaPunctuation(text);
   }
+}
+// ── 無音区間の除外 & Whisper幻覚（ハルシネーション）対策 ──
+const SILENCE_RMS_THRESHOLD = 0.006; // これ未満は「無音」とみなしWhisperに送らない
+function computeRMS(audioBuffer){
+  const data = audioBuffer.getChannelData(0);
+  let sum = 0;
+  for (let i = 0; i < data.length; i++) sum += data[i]*data[i];
+  return Math.sqrt(sum / (data.length || 1));
+}
+const HALLUCINATION_PHRASES = [
+  'ご視聴ありがとうございました','ご視聴いただきありがとうございます','ご視聴ありがとうございます',
+  '日本語字幕をオンに','チャンネル登録','高評価','最後までご視聴','次の動画でお会いしましょう',
+  '字幕視聴者の皆様','この動画が気に入ったら','コメント欄で教えて'
+];
+function isHallucinationText(t){
+  if(!t) return false;
+  return HALLUCINATION_PHRASES.some(p=>t.includes(p));
+}
+function isHallucinatedSegment(seg){
+  const noSpeech = typeof seg.no_speech_prob==='number' && seg.no_speech_prob>0.6;
+  const highCompression = typeof seg.compression_ratio==='number' && seg.compression_ratio>2.4;
+  const phraseMatch = isHallucinationText((seg.text||'').trim());
+  return noSpeech || highCompression || phraseMatch;
+}
+// 「同じ文が連続で繰り返される」Whisperの反復ループ的な幻覚を検出し破棄する
+function collapseRepetition(t){
+  if(!t) return t;
+  const sentences = t.split(/(?<=[。！？])/).filter(s=>s.trim());
+  if(sentences.length < 3) return t;
+  let dup=1, maxDup=1;
+  for(let i=1;i<sentences.length;i++){
+    if(sentences[i]===sentences[i-1]){ dup++; maxDup=Math.max(maxDup,dup); }
+    else dup=1;
+  }
+  if(maxDup>=3) return ''; // 明らかな反復ループ→この発言全体を破棄
+  return t;
 }
 function getVocabPrompt(){
   const words=(localStorage.getItem('vm_vocab')||'').trim();
