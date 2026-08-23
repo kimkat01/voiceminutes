@@ -20810,7 +20810,9 @@ async function startRec(){
       const rendered = await offCtx.startRendering();
 
       // 無音チェック：ほぼ無音ならWhisperに送らずスキップ（幻覚防止）
-      if(computeRMS(rendered) < SILENCE_RMS_THRESHOLD){
+      const rms = computeRMS(rendered);
+      if(rms < SILENCE_RMS_THRESHOLD){
+        showToast('ok','🔇 無音を検出したためスキップしました（音量: '+rms.toFixed(4)+'）');
         return;
       }
 
@@ -21005,6 +21007,7 @@ async function processWhisperFile(file){
 
     // このチャンクが丸ごと無音ならWhisperに送らずスキップ（幻覚防止・コスト削減）
     if(computeRMS(rendered) < SILENCE_RMS_THRESHOLD){
+      console.log('chunk '+(i+1)+' skipped as silence');
       continue;
     }
 
@@ -21363,7 +21366,7 @@ async function punctuateText(text){
   }
 }
 // ── 無音区間の除外 & Whisper幻覚（ハルシネーション）対策 ──
-const SILENCE_RMS_THRESHOLD = 0.006; // これ未満は「無音」とみなしWhisperに送らない
+const SILENCE_RMS_THRESHOLD = 0.0015; // これ未満は「無音」とみなしWhisperに送らない（誤検知を避けるため低めに設定）
 function computeRMS(audioBuffer){
   const data = audioBuffer.getChannelData(0);
   let sum = 0;
