@@ -21124,7 +21124,7 @@ function renderSummary(r){
   document.getElementById('summaryBody').innerHTML=html||'<div class="empty-state"><div class="empty-text">要点が見つかりませんでした</div></div>';
 }
 function saveHistory(text,result){
-  let hist=JSON.parse(localStorage.getItem('vm_history')||'[]');
+  let hist=safeJsonParse(localStorage.getItem('vm_history'), []);
   const dateStr=new Date().toLocaleDateString('ja-JP',{month:'long',day:'numeric'});
   const title=SCENE_LABELS[currentScene]+' '+dateStr;
   hist.unshift({id:Date.now(),date:new Date().toLocaleString('ja-JP'),scene:currentScene,sceneLabel:SCENE_LABELS[currentScene],transcript:text,utterances,summary:result,title:title});
@@ -21133,7 +21133,7 @@ function saveHistory(text,result){
   renderHistory();
 }
 function renderHistory(){
-  const hist=JSON.parse(localStorage.getItem('vm_history')||'[]');
+  const hist=safeJsonParse(localStorage.getItem('vm_history'), []);
   const list=document.getElementById('historyList');
   if(!hist.length){list.innerHTML='<div class="empty-history">録音・要点整理した記録が<br>ここに表示されます</div>';return;}
   list.innerHTML=hist.map(h=>
@@ -21152,14 +21152,14 @@ function renderHistory(){
 
 function deleteHistory(id){
   if(!confirm('この記録を削除しますか？')) return;
-  let hist=JSON.parse(localStorage.getItem('vm_history')||'[]');
+  let hist=safeJsonParse(localStorage.getItem('vm_history'), []);
   hist=hist.filter(h=>h.id!==id);
   localStorage.setItem('vm_history',JSON.stringify(hist));
   renderHistory();
   showToast('ok','🗑 記録を削除しました');
 }
 function loadHistory(id){
-  const hist=JSON.parse(localStorage.getItem('vm_history')||'[]');
+  const hist=safeJsonParse(localStorage.getItem('vm_history'), []);
   const h=hist.find(x=>x.id===id);
   if(!h)return;
   utterances=(h.utterances&&h.utterances.length)?h.utterances:[{speaker:'a',label:'話者A',icon:'A',side:'right',text:h.transcript,ts:0}];
@@ -21299,7 +21299,7 @@ function confirmSave() {
   showToast('ok', '✅ 「' + title + '」を保存しました');
 }
 function saveHistoryWithTitle(title) {
-  let hist = JSON.parse(localStorage.getItem('vm_history') || '[]');
+  let hist = safeJsonParse(localStorage.getItem('vm_history'), []);
   // 要点整理結果があれば含める
   const summaryBody = document.getElementById('summaryBody');
   const hasSummary = summaryBody && summaryBody.querySelector('.summary-card');
@@ -21326,7 +21326,11 @@ function closeApiModal(){document.getElementById('apiModal').classList.add('hidd
 function saveApiKey(){const val=document.getElementById('apiKeyInput').value.trim();if(!val.startsWith('sk-ant-')){showToast('err','正しいAPIキーを入力してください（sk-ant-で始まる）');return;}localStorage.setItem('vm_apikey',val);closeApiModal();showToast('ok','✅ APIキーを保存しました');}
 function openSpeakerModal(){renderRuleList();document.getElementById('speakerModal').classList.remove('hidden');}
 function closeSpeakerModal(){document.getElementById('speakerModal').classList.add('hidden');}
-function getRules(){return JSON.parse(localStorage.getItem('vm_rules')||'[]');}
+// localStorageのJSONデータが壊れていてもページ初期化全体が止まらないようにする安全な読み込み関数
+function safeJsonParse(str, fallback){
+  try{ const v = JSON.parse(str); return v===undefined?fallback:v; }catch(e){ return fallback; }
+}
+function getRules(){return safeJsonParse(localStorage.getItem('vm_rules'), []);}
 function saveRules(r){localStorage.setItem('vm_rules',JSON.stringify(r));}
 function renderRuleList(){const rules=getRules(),el=document.getElementById('replaceRuleList');if(!rules.length){el.innerHTML='<div style="font-size:12px;color:var(--text3);text-align:center;padding:10px">ルールが登録されていません</div>';return;}el.innerHTML=rules.map((r,i)=>'<div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;"><span style="flex:1;font-size:13px;color:var(--text);font-family:\'DM Mono\',monospace">'+escHtml(r.from||'（空白）')+'</span><span style="color:var(--text3);font-size:16px">→</span><span style="flex:1;font-size:13px;color:var(--accent2);font-family:\'DM Mono\',monospace">'+escHtml(r.to||'（削除）')+'</span><button class="btn-sm" onclick="deleteRule('+i+')" style="padding:3px 8px;color:var(--red);border-color:var(--red)">✕</button></div>').join('');}
 function addRule(){const from=document.getElementById('ruleFrom').value.trim(),to=document.getElementById('ruleTo').value.trim();if(!from){showToast('err','置換前の文字を入力してください');return;}const rules=getRules();if(rules.find(r=>r.from===from)){showToast('err','「'+from+'」はすでに登録されています');return;}rules.push({from,to});saveRules(rules);document.getElementById('ruleFrom').value='';document.getElementById('ruleTo').value='';renderRuleList();showToast('ok','✅「'+from+'」→「'+(to||'（削除）')+'」を登録しました');}
