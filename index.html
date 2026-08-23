@@ -20820,8 +20820,7 @@ async function startRec(){
       fd.append('file', new File([wavBlob],'mic_chunk.wav',{type:'audio/wav'}), 'mic_chunk.wav');
       fd.append('model','whisper-1');
       fd.append('language','ja');
-      fd.append('response_format','verbose_json');
-      fd.append('timestamp_granularities[]','segment');
+      fd.append('response_format','text');
       const vocabPrompt = getVocabPrompt();
       if(vocabPrompt) fd.append('prompt', vocabPrompt);
 
@@ -20832,15 +20831,19 @@ async function startRec(){
         body:fd
       });
       const text = await res.text();
-      const data = (() => { try{ return JSON.parse(text); }catch{ return null; } })();
+      let data = null;
+      try{ data = JSON.parse(text); }catch{ data = null; }
 
       let joined = '';
-      if(data && !data.error){
-        if(data.segments && data.segments.length>0){
-          joined = data.segments.filter(seg=>!isHallucinatedSegment(seg)).map(s=>s.text.trim()).join('');
-        } else if(data.text){
-          joined = data.text.trim();
-        }
+      if(data && data.error){
+        showToast('err','⚠ Whisperエラー: '+(data.error.message||JSON.stringify(data.error)));
+      } else if(data && data.segments && data.segments.length>0){
+        joined = data.segments.filter(seg=>!isHallucinatedSegment(seg)).map(s=>s.text.trim()).join('');
+      } else if(data && typeof data.text === 'string'){
+        joined = data.text.trim();
+      } else if(!data && text && text.trim()){
+        // JSONとして解析できなかった場合はプレーンテキストとして扱う（フォーマット差異への保険）
+        joined = text.trim();
       }
       joined = collapseRepetition(joined);
 
