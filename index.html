@@ -21009,11 +21009,9 @@ async function processWhisperFile(file){
       continue;
     }
 
-    // このチャンクが丸ごと無音ならWhisperに送らずスキップ（幻覚防止・コスト削減）
-    if(computeRMS(rendered) < SILENCE_RMS_THRESHOLD){
-      console.log('chunk '+(i+1)+' skipped as silence');
-      continue;
-    }
+    // ※チャンク全体の平均音量による事前スキップは廃止（一部だけ静かな区間があると
+    // 実際の会話ごと丸々失われるため）。無音・幻覚対策はWhisperの応答を見た後、
+    // セグメント単位（no_speech_prob・compression_ratio・フレーズ一致）で行う。
 
     const wavBlob = audioBufferToWav(rendered);
     const fd = new FormData();
