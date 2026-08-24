@@ -21408,10 +21408,10 @@ function collapseRepetition(t){
   return t;
 }
 function getVocabPrompt(){
+  // 説明文・指示文はWhisperの幻覚（プロンプトの文章をオウム返しする現象）を誘発するため使わない。
+  // 固有名詞・専門用語のヒントのみを渡す（句読点は別途Claudeで後付けするためここでは指示しない）。
   const words=(localStorage.getItem('vm_vocab')||'').trim();
-  let base='これは日本語の保育施設内での会話です。句読点（、や。）を適切に使い、自然な日本語の文章として書き起こしてください。';
-  if(words) base+=' 次の固有名詞や専門用語が登場する場合があります：'+words+'。';
-  return base;
+  return words;
 }
 function toggleVocabPanel(){document.getElementById('vocabDropdownPanel').classList.toggle('open');}
 document.addEventListener('click',function(e){
