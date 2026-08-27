@@ -20962,8 +20962,15 @@ async function processWhisperFile(file){
     zone.innerHTML = '<div class="whisper-countdown"><div class="countdown-status">🔄 音声を読み込み中…</div></div>';
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const arrayBuf = await file.arrayBuffer();
-    audioBuf = await audioCtx.decodeAudioData(arrayBuf);
+    let decoded = await audioCtx.decodeAudioData(arrayBuf);
     audioCtx.close();
+
+    // ── メモリ節約: 元の高音質（多くは44.1kHzステレオ）のまま最後まで保持すると、
+    //    長時間の録音でタブがメモリ不足になり、エラーも出さず処理が止まることがある。
+    //    最初に一度だけ16kHzモノラルへ落として以降はこの軽量版だけを使う（元データは破棄）。
+    zone.innerHTML = '<div class="whisper-countdown"><div class="countdown-status">🔄 音声を軽量化中…</div></div>';
+    audioBuf = await sliceAudioBuffer(decoded, 0, decoded.duration, TARGET_SR);
+    decoded = null; // 元の高音質バッファをGC対象にする
   } catch(e) {
     showToast('err', '❌ 音声読み込みエラー: ' + e.message);
     restoreWhisperDropZone(); return;
@@ -21096,6 +21103,7 @@ async function processWhisperFile(file){
       }
 
       updateTranscriptUI();
+      autosaveProgress(i+1, totalChunks); // 途中でタブが落ちても続きが復元できるよう毎チャンク保存
 
     } catch(e) {
       showToast('err', '❌ Chunk ' + (i+1) + ' の結果処理でエラー: ' + e.message);
@@ -21113,6 +21121,38 @@ async function processWhisperFile(file){
 }
 
 
+// ── 自動保存（タブが落ちても復元できるようにするための仕組み）──
+// 長時間音声の文字起こし中は、チャンクごとにここまでの結果をlocalStorageへ保存しておく。
+// タブがメモリ不足等で落ちても、次に開いたときに続きを失わずに済む。
+function autosaveProgress(doneChunks, totalChunks){
+  try{
+    localStorage.setItem('vm_autosave', JSON.stringify({
+      utterances: utterances,
+      scene: currentScene,
+      doneChunks: doneChunks,
+      totalChunks: totalChunks,
+      savedAt: Date.now()
+    }));
+  }catch(e){ /* 容量超過等は無視（自動保存は補助機能のため） */ }
+}
+function clearAutosave(){ try{ localStorage.removeItem('vm_autosave'); }catch(e){} }
+function restoreAutosaveIfAny(){
+  let saved;
+  try{ saved = JSON.parse(localStorage.getItem('vm_autosave')||'null'); }catch(e){ saved = null; }
+  if(!saved || !saved.utterances || !saved.utterances.length) return;
+  const ageMin = Math.round((Date.now() - (saved.savedAt||0)) / 60000);
+  const msg = '前回、文字起こしが' + saved.doneChunks + '/' + saved.totalChunks + 'チャンク（約' + ageMin + '分前）まで進んだ状態で中断したデータが見つかりました。復元しますか？';
+  if(confirm(msg)){
+    utterances = saved.utterances;
+    if(saved.scene) currentScene = saved.scene;
+    renderBubbles();
+    updateTranscriptUI();
+    showToast('ok', '↩ 前回の続き（' + saved.doneChunks + '/' + saved.totalChunks + 'チャンク分）を復元しました。残りの音声区間はもう一度ファイルをアップロードして再開してください');
+  } else {
+    clearAutosave();
+  }
+}
+
 function restoreWhisperDropZone(){
   const z=document.getElementById('whisperDropZone');
   if(!z)return;
@@ -21126,7 +21166,7 @@ function restoreWhisperDropZone(){
   z.ondrop=function(e){e.preventDefault();z.classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f)processWhisperFile(f);};
 }
 
-function clearTranscript(){utterances=[];fullTranscript='';currentSpeakerIdx=0;renderBubbles();updateCharCount();document.getElementById('timerDisplay').textContent='00:00';document.getElementById('interimBar').textContent='';
+function clearTranscript(){utterances=[];fullTranscript='';currentSpeakerIdx=0;renderBubbles();updateCharCount();document.getElementById('timerDisplay').textContent='00:00';document.getElementById('interimBar').textContent='';clearAutosave();
   const btn=document.getElementById('btnSaveRecord');if(btn)btn.classList.remove('visible');document.getElementById('summaryBody').innerHTML='<div class="empty-state"><div class="empty-icon">✨</div><div class="empty-text">文字起こし後に<br>「AI要点整理」を実行すると<br>決定事項・TODOが<br>自動でまとまります</div></div>';}
 function copyTranscript(){const text=utterances.map(u=>'['+fmtSec(u.ts)+'] 【'+u.label+'】'+u.text).join('\n');if(!text.trim()){showToast('err','コピーする文字がありません');return;}navigator.clipboard.writeText(text).then(()=>showToast('ok','📋 クリップボードにコピーしました'));}
 function applyReplace(){if(!utterances.length){showToast('err','発言がありません');return;}const rules=getRules();if(!rules.length){openSpeakerModal();showToast('err','置換ルールが登録されていません');return;}let count=0;utterances=utterances.map(u=>{let t=u.text;for(const r of rules){const re=new RegExp(r.from.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g');const m=t.match(re);if(m)count+=m.length;t=t.replace(re,r.to);}return{...u,text:t};});renderBubbles();updateTranscriptUI();showToast('ok','✅ '+count+' 箇所を置換しました');}
@@ -21324,6 +21364,7 @@ function confirmSave() {
   const title = titleVal || (SCENE_LABELS[currentScene] + ' ' + new Date().toLocaleDateString('ja-JP'));
   saveHistoryWithTitle(title);
   closeSaveModal();
+  clearAutosave(); // 正式保存できたので自動保存の下書きは不要
   showToast('ok', '✅ 「' + title + '」を保存しました');
 }
 function saveHistoryWithTitle(title) {
@@ -21356,6 +21397,7 @@ function openSpeakerModal(){renderRuleList();document.getElementById('speakerMod
 function closeSpeakerModal(){document.getElementById('speakerModal').classList.add('hidden');}
 // localStorageのJSONデータが壊れていてもページ初期化全体が止まらないようにする安全な読み込み関数
 function safeJsonParse(str, fallback){
+  if(str===null || str===undefined) return fallback; // JSON.parse(null)は例外にならず"null"→nullを返すため要注意
   try{ const v = JSON.parse(str); return v===undefined?fallback:v; }catch(e){ return fallback; }
 }
 function getRules(){return safeJsonParse(localStorage.getItem('vm_rules'), []);}
@@ -21453,6 +21495,7 @@ document.addEventListener('click',function(e){
 });
 
 renderHistory();
+restoreAutosaveIfAny(); // 前回タブが落ちた等で自動保存が残っていれば復元を促す
 
 refreshWhisperKeyStatus();
 loadVocab();
