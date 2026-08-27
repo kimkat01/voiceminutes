@@ -20974,6 +20974,8 @@ async function processWhisperFile(file){
   let allText = '';
   let chunkStart = 0;
   let chunkIndex = 0;
+  const failedChunks = []; // 通信リトライしても失敗したチャンク（欠落箇所として最後に通知）
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   showToast('ok', '🎵 ' + Math.round(totalDuration/60) + '分の音声を' + totalChunks + '分割で処理します');
 
@@ -21023,20 +21025,43 @@ async function processWhisperFile(file){
     const vocabPrompt2 = getVocabPrompt();
     if(vocabPrompt2) fd.append('prompt', vocabPrompt2);
 
-    try {
-      const res = await fetch('https://voiceminutes-proxy.cryk0289.workers.dev/whisper', {
-        method: 'POST',
-        headers: {'Authorization': 'Bearer ' + apiKey, 'X-OpenAI-Key': apiKey},
-        body: fd
-      });
-      const text = await res.text();
-      const data = JSON.parse(text);
-
-      if (data.error) {
-        showToast('err', '❌ Chunk ' + (i+1) + ' エラー: ' + (data.error.message || JSON.stringify(data.error)));
-        continue;
+    // ── 通信・パースエラーは最大3回まで自動リトライ（一時的なネットワーク不調で
+    //    チャンクごと欠落するのを防ぐため。1回失敗しただけで丸ごと諦めない）──
+    let data = null, lastErr = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const res = await fetch('https://voiceminutes-proxy.cryk0289.workers.dev/whisper', {
+          method: 'POST',
+          headers: {'Authorization': 'Bearer ' + apiKey, 'X-OpenAI-Key': apiKey},
+          body: fd
+        });
+        const text = await res.text();
+        data = JSON.parse(text);
+        if (data.error) {
+          lastErr = new Error(data.error.message || JSON.stringify(data.error));
+          data = null;
+          throw lastErr;
+        }
+        lastErr = null;
+        break; // 成功
+      } catch(e) {
+        lastErr = e;
+        data = null;
+        if (attempt < 3) {
+          zone.querySelector('.countdown-status') && (zone.querySelector('.countdown-status').textContent =
+            '⚠ 通信エラー、再試行中… (' + (i+1) + '/' + totalChunks + ' / ' + attempt + '回目)');
+          await sleep(1500 * attempt);
+        }
       }
+    }
 
+    if (!data) {
+      showToast('err', '❌ Chunk ' + (i+1) + ' は3回試行しても失敗: ' + (lastErr ? lastErr.message : '不明なエラー'));
+      failedChunks.push({ index: i+1, startMin: Math.round(chunkStart/60), endMin: Math.round(chunkEnd/60) });
+      continue;
+    }
+
+    try {
       // セグメントを吹き出しに追加（タイムスタンプはchunkStart分オフセット）
       if (data.segments && data.segments.length > 0) {
         const GAP_SEC = 1.5;
@@ -21073,11 +21098,16 @@ async function processWhisperFile(file){
       updateTranscriptUI();
 
     } catch(e) {
-      showToast('err', '❌ Chunk ' + (i+1) + ' 通信エラー: ' + e.message);
+      showToast('err', '❌ Chunk ' + (i+1) + ' の結果処理でエラー: ' + e.message);
+      failedChunks.push({ index: i+1, startMin: Math.round(chunkStart/60), endMin: Math.round(chunkEnd/60) });
     }
   }
 
   currentSpeakerIdx = 0;
+  if (failedChunks.length > 0) {
+    const ranges = failedChunks.map(c => c.startMin + '〜' + c.endMin + '分').join('、');
+    showToast('err', '⚠ ' + failedChunks.length + '箇所（' + ranges + '）は文字起こしできませんでした。音声を確認の上、必要なら再実行してください');
+  }
   showToast('ok', '✅ 全' + totalChunks + 'チャンクの文字起こし完了！ 計' + utterances.length + '発言');
   restoreWhisperDropZone();
 }
@@ -21389,10 +21419,12 @@ function isHallucinationText(t){
   return HALLUCINATION_PHRASES.some(p=>t.includes(p));
 }
 function isHallucinatedSegment(seg){
-  const noSpeech = typeof seg.no_speech_prob==='number' && seg.no_speech_prob>0.6;
-  const highCompression = typeof seg.compression_ratio==='number' && seg.compression_ratio>2.4;
+  // no_speech_prob と compression_ratio は単独では誤検知（早口・小声・電話音声などを本物の発言ごと誤って破棄）が
+  // 多いため、両方が同時に高い場合のみ「幻聴」と判定する（OR→AND）。定型の幻聴フレーズ一致は単独でも破棄する。
+  const noSpeech = typeof seg.no_speech_prob==='number' && seg.no_speech_prob>0.75;
+  const highCompression = typeof seg.compression_ratio==='number' && seg.compression_ratio>2.6;
   const phraseMatch = isHallucinationText((seg.text||'').trim());
-  return noSpeech || highCompression || phraseMatch;
+  return (noSpeech && highCompression) || phraseMatch;
 }
 // 「同じ文が連続で繰り返される」Whisperの反復ループ的な幻覚を検出し破棄する
 function collapseRepetition(t){
