@@ -20951,6 +20951,7 @@ async function processWhisperFile(file){
   const apiKey = localStorage.getItem('vm_openai_key') || '';
   const zone = document.getElementById('whisperDropZone');
   zone.classList.add('processing');
+  speakerPitchAvg = [null, null]; // ファイルごとに話者のピッチ学習をリセット
 
   let audioBuf;
   const TARGET_SR = 16000;       // 16kHz
@@ -21072,31 +21073,34 @@ async function processWhisperFile(file){
       // セグメントを吹き出しに追加（タイムスタンプはchunkStart分オフセット）
       if (data.segments && data.segments.length > 0) {
         const GAP_SEC = 1.5;
-        let speakerIdx = (utterances.length > 0 && utterances[utterances.length-1].side === 'right') ? 1 : 0;
         let group = [], groupStart = Math.round(chunkStart + data.segments[0].start);
         let prevEnd = data.segments[0].end;
+        let groupFirstSeg = data.segments[0];
+
+        // ── 話者判定：無音の有無だけで機械的にトグルするのではなく、
+        //    グループ先頭セグメントの声の高さ（ピッチ）を解析し、
+        //    これまで記録した話者0/1の平均ピッチに近い方へ割り当てる ──
+        const flushGroup = async () => {
+          if (group.length === 0) return;
+          const pitch = estimateSegmentPitch(rendered, groupFirstSeg, TARGET_SR);
+          currentSpeakerIdx = assignSpeakerByPitch(pitch);
+          const g = collapseRepetition(group.join(''));
+          if (g) addUtterance(await punctuateText(g), groupStart);
+          group = [];
+        };
 
         for (let j = 0; j < data.segments.length; j++) {
           const seg = data.segments[j];
           const gap = seg.start - prevEnd;
           if (j > 0 && gap >= GAP_SEC) {
-            if (group.length > 0) {
-              currentSpeakerIdx = speakerIdx;
-              const g=collapseRepetition(group.join(''));
-              if(g) addUtterance(await punctuateText(g), groupStart);
-              group = [];
-            }
-            speakerIdx = 1 - speakerIdx;
+            await flushGroup();
             groupStart = Math.round(chunkStart + seg.start);
+            groupFirstSeg = seg;
           }
           if(!isHallucinatedSegment(seg)) group.push(seg.text.trim());
           prevEnd = seg.end;
         }
-        if (group.length > 0) {
-          currentSpeakerIdx = speakerIdx;
-          const g=collapseRepetition(group.join(''));
-          if(g) addUtterance(await punctuateText(g), groupStart);
-        }
+        await flushGroup();
       } else if (data.text && data.text.trim()) {
         const g=collapseRepetition(data.text.trim());
         if(g && !isHallucinationText(g)) addUtterance(await punctuateText(g), Math.round(chunkStart));
@@ -21467,6 +21471,59 @@ function isHallucinatedSegment(seg){
   const highCompression = typeof seg.compression_ratio==='number' && seg.compression_ratio>2.6;
   const phraseMatch = isHallucinationText((seg.text||'').trim());
   return (noSpeech && highCompression) || phraseMatch;
+}
+
+// ══════════════════════════════════════════════════════
+// 話者分離：ピッチ（声の高さ）による2話者判定
+// 無音の有無だけで機械的にA/Bをトグルするのではなく、
+// 発言グループ先頭の声の高さを解析し、これまで記録した
+// 話者0/1の平均ピッチに近い方へ割り当てる（2人想定）。
+// ══════════════════════════════════════════════════════
+let speakerPitchAvg = [null, null];
+
+function estimateSegmentPitch(audioBuf, seg, sampleRate){
+  try{
+    const ch = audioBuf.getChannelData(0);
+    const startIdx = Math.max(0, Math.floor(seg.start * sampleRate));
+    const maxAnalyzeSec = 2.0; // 先頭2秒だけ解析（高速化）
+    const endIdx = Math.min(ch.length, Math.floor(Math.min(seg.end, seg.start + maxAnalyzeSec) * sampleRate));
+    if(endIdx - startIdx < sampleRate * 0.15) return 0; // 短すぎる発言は判定不能
+    return autocorrelationPitch(ch.subarray(startIdx, endIdx), sampleRate);
+  }catch(e){ return 0; }
+}
+
+function autocorrelationPitch(samples, sampleRate){
+  let rms = 0;
+  for(let i=0;i<samples.length;i++) rms += samples[i]*samples[i];
+  rms = Math.sqrt(rms/samples.length);
+  if(rms < 0.008) return 0; // 無音・小さすぎる音
+
+  const minFreq=70, maxFreq=400; // 人の声の範囲
+  const minLag=Math.floor(sampleRate/maxFreq), maxLag=Math.floor(sampleRate/minFreq);
+  let bestLag=-1, bestCorr=0;
+  for(let lag=minLag; lag<=maxLag; lag++){
+    let corr=0;
+    for(let i=0;i<samples.length-lag;i+=2){
+      corr += samples[i]*samples[i+lag];
+    }
+    if(corr>bestCorr){ bestCorr=corr; bestLag=lag; }
+  }
+  return bestLag>0 ? sampleRate/bestLag : 0;
+}
+
+function assignSpeakerByPitch(pitch){
+  if(!pitch) return currentSpeakerIdx; // 判定不能なら直前の話者を維持
+  if(speakerPitchAvg[0]===null){ speakerPitchAvg[0]=pitch; return 0; }
+  if(speakerPitchAvg[1]===null){
+    if(Math.abs(pitch - speakerPitchAvg[0]) > 15){ speakerPitchAvg[1]=pitch; return 1; }
+    speakerPitchAvg[0] = (speakerPitchAvg[0]+pitch)/2;
+    return 0;
+  }
+  const d0 = Math.abs(pitch - speakerPitchAvg[0]);
+  const d1 = Math.abs(pitch - speakerPitchAvg[1]);
+  const idx = d0 <= d1 ? 0 : 1;
+  speakerPitchAvg[idx] = speakerPitchAvg[idx]*0.7 + pitch*0.3;
+  return idx;
 }
 // 「同じ文が連続で繰り返される」Whisperの反復ループ的な幻覚を検出し破棄する
 function collapseRepetition(t){
