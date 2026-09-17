@@ -270,12 +270,12 @@
   .whisper-key-status.ng { color: var(--red); background: rgba(224,90,90,0.10); }
   .vocab-row { margin-bottom: 10px; }
   .vocab-label { display: block; font-size: 11px; font-weight: 700; color: var(--text2); margin-bottom: 5px; }
-  .vocab-input { width: 100%; padding: 8px 12px; background: var(--surface2); border: 1.5px solid var(--border2); border-radius: 20px; color: var(--text); font-family: 'Noto Sans JP', sans-serif; font-size: 12px; outline: none; transition: border 0.15s; }
+  .vocab-input { width: 100%; padding: 8px 12px; background: var(--surface2); border: 1.5px solid var(--border2); border-radius: 12px; color: var(--text); font-family: 'Noto Sans JP', sans-serif; font-size: 12px; outline: none; transition: border 0.15s; resize: vertical; min-height: 56px; line-height: 1.6; box-sizing: border-box; }
   .vocab-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(43,110,226,0.10); }
   .vocab-hint { font-size: 10px; color: var(--text3); margin-top: 5px; line-height: 1.5; }
   .vocab-dropdown-wrap { position: relative; }
   .vocab-dropdown-panel {
-    position: absolute; top: calc(100% + 8px); right: 0; width: 300px;
+    position: absolute; top: calc(100% + 8px); right: 0; width: 320px;
     background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius);
     box-shadow: var(--shadow-lg); padding: 14px; z-index: 200;
     display: none;
@@ -283,6 +283,11 @@
   .vocab-dropdown-panel.open { display: block; }
   .vocab-dropdown-title { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
   .vocab-dropdown-desc { font-size: 11px; color: var(--text2); line-height: 1.6; margin-bottom: 10px; }
+  .vocab-dropdown-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
+  .vocab-charcount { font-size: 10px; color: var(--text3); }
+  .vocab-charcount.warn { color: var(--red); font-weight: 700; }
+  .vocab-preset-btn { font-size: 11px; background: none; border: 1px dashed var(--border2); color: var(--text2); border-radius: 12px; padding: 3px 9px; cursor: pointer; }
+  .vocab-preset-btn:hover { border-color: var(--accent); color: var(--accent); }
 
   /* ── 右パネル ── */
   .right-panel { background: var(--surface); display: flex; flex-direction: column; overflow: hidden; position: relative; }
@@ -319,6 +324,7 @@
   .btn-ai:hover { transform: translateY(-1px); box-shadow: 0 5px 20px rgba(43,110,226,0.42); }
   .btn-ai:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
   .ai-hint { font-size: 10px; color: var(--text3); text-align: center; margin-top: 7px; line-height: 1.5; }
+  .ai-hint.stale { color: var(--red); font-weight: 700; }
 
   /* エクスポート */
   .export-row { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1.5px solid var(--border); }
@@ -20559,8 +20565,12 @@ var __async = (__this, __arguments, generator) => {
       <button class="btn-sm" onclick="toggleVocabPanel()">🔤 用語登録</button>
       <div class="vocab-dropdown-panel" id="vocabDropdownPanel">
         <div class="vocab-dropdown-title">固有名詞・専門用語（読み違い防止）</div>
-        <div class="vocab-dropdown-desc">💡 人名・施設名・専門用語などをカンマ区切りで入力しておくと、Whisperの認識精度が上がります。</div>
-        <input type="text" class="vocab-input" id="vocabInput" placeholder="例：木村、しおどめ保育園、三郷中央、ヒヤリハット" oninput="saveVocab()">
+        <div class="vocab-dropdown-desc">💡 人名・施設名・専門用語などをカンマ区切りで入力しておくと、Whisperの認識精度が上がります。よく間違われる言葉ほど効果があります。</div>
+        <textarea class="vocab-input" id="vocabInput" rows="3" placeholder="例：木村、ゆき子、しおどめ保育園、三郷中央、週案、延長番、園庭、申し送り" oninput="saveVocab()"></textarea>
+        <div class="vocab-dropdown-foot">
+          <button type="button" class="vocab-preset-btn" onclick="addPresetVocab()">＋保育でよくある用語を追加</button>
+          <span class="vocab-charcount" id="vocabCharCount"></span>
+        </div>
       </div>
     </div>
     <button class="btn-sm" onclick="openSpeakerModal()">👤 話者設定</button>
@@ -20705,6 +20715,7 @@ var __async = (__this, __arguments, generator) => {
 
 
 let isRecording=false,timerInt=null,timerSec=0,waveInt=null,currentScene='meeting',fullTranscript='';
+let lastSummaryTranscript=null; // 直近にAI要点整理を実行した時点の文字起こし全文（編集後の再実行忘れを検知するため）
 const SCENE_LABELS={meeting:'職員会議',parents:'保護者面談',interview:'採用面接'};
 const SCENE_PROMPTS={
   meeting:`あなたは保育施設の職員会議の議事録作成アシスタントです。以下の会議の文字起こしテキストを分析し、JSON形式で要点を整理してください。
@@ -20750,6 +20761,21 @@ function updateTranscriptUI(){
   if(btn){
     if(utterances.length>0) btn.classList.add('visible');
     else btn.classList.remove('visible');
+  }
+  checkSummaryStale();
+}
+// 文字起こし（人による修正・話者置換・再文字起こし等）がAI要点整理の実行後に
+// 変わっていないかを確認する。ズレていれば「要点整理をやり直してください」と警告し、
+// 誤字が直っていないサマリーをそのまま使ってしまう事故を防ぐ。
+function checkSummaryStale(){
+  const hint=document.getElementById('aiHint');
+  if(!hint) return;
+  if(lastSummaryTranscript!==null && fullTranscript.trim()!==lastSummaryTranscript){
+    hint.textContent='⚠ 文字起こしが変更されています。最新の内容で「AI要点整理」をやり直してください';
+    hint.classList.add('stale');
+  } else {
+    hint.textContent='文字起こしが完了してから実行してください';
+    hint.classList.remove('stale');
   }
 }
 
@@ -21074,30 +21100,47 @@ async function processWhisperFile(file){
       // セグメントを吹き出しに追加（タイムスタンプはchunkStart分オフセット）
       if (data.segments && data.segments.length > 0) {
         const GAP_SEC = 1.5;
+        const MIN_CONFIDENT_DUR = 0.4; // これより短い相槌等はピッチが不安定なため話者交代の根拠にしない
         let group = [], groupStart = Math.round(chunkStart + data.segments[0].start);
         let prevEnd = data.segments[0].end;
-        let groupFirstSeg = data.segments[0];
+        let groupSpeakerIdx = null; // このグループが現在どちらの話者と判定されているか
 
         // ── 話者判定：無音の有無だけで機械的にトグルするのではなく、
-        //    グループ先頭セグメントの声の高さ（ピッチ）を解析し、
-        //    これまで記録した話者0/1の平均ピッチに近い方へ割り当てる ──
+        //    セグメントごとに声の高さ（ピッチ）を解析し、これまで記録した
+        //    話者0/1の平均ピッチに近い方へ割り当てる。
+        //    「はい」「お願いします」等の短い相槌・受け答えは1.5秒以上の無音を
+        //    挟まずに割り込むことが多く、無音区間だけを区切りにすると
+        //    別の話者の発言が同じ吹き出しに混ざってしまう。そのため、
+        //    グループ内でも確信度の高い話者交代を検知したらそこで発言を区切る ──
         const flushGroup = async () => {
           if (group.length === 0) return;
-          const pitch = estimateSegmentPitch(rendered, groupFirstSeg, TARGET_SR);
-          currentSpeakerIdx = assignSpeakerByPitch(pitch);
+          if (groupSpeakerIdx !== null) currentSpeakerIdx = groupSpeakerIdx;
           const g = collapseRepetition(group.join(''));
           if (g) addUtterance(await punctuateText(g), groupStart);
           group = [];
+          groupSpeakerIdx = null;
         };
 
         for (let j = 0; j < data.segments.length; j++) {
           const seg = data.segments[j];
           const gap = seg.start - prevEnd;
-          if (j > 0 && gap >= GAP_SEC) {
+          const segDur = seg.end - seg.start;
+          const pitch = estimateSegmentPitch(rendered, seg, TARGET_SR);
+          // 話者平均ピッチの学習を継続させるため、セグメントごとにassignSpeakerByPitchを呼ぶ
+          // （こう呼ぶことで、まだ登場していなかった話者の平均ピッチもここで初めて登録される）
+          const guess = pitch ? assignSpeakerByPitch(pitch) : null;
+          const confidentSwitch = j > 0 && guess !== null && groupSpeakerIdx !== null &&
+            guess !== groupSpeakerIdx && segDur >= MIN_CONFIDENT_DUR;
+
+          if (j > 0 && (gap >= GAP_SEC || confidentSwitch)) {
             await flushGroup();
             groupStart = Math.round(chunkStart + seg.start);
-            groupFirstSeg = seg;
           }
+
+          if (groupSpeakerIdx === null && guess !== null) {
+            groupSpeakerIdx = guess; // このグループの話者を確定
+          }
+
           if(!isHallucinatedSegment(seg)) group.push(seg.text.trim());
           prevEnd = seg.end;
         }
@@ -21171,7 +21214,7 @@ function restoreWhisperDropZone(){
   z.ondrop=function(e){e.preventDefault();z.classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f)processWhisperFile(f);};
 }
 
-function clearTranscript(){utterances=[];fullTranscript='';currentSpeakerIdx=0;renderBubbles();updateCharCount();document.getElementById('timerDisplay').textContent='00:00';document.getElementById('interimBar').textContent='';clearAutosave();
+function clearTranscript(){utterances=[];fullTranscript='';currentSpeakerIdx=0;lastSummaryTranscript=null;renderBubbles();updateCharCount();document.getElementById('timerDisplay').textContent='00:00';document.getElementById('interimBar').textContent='';clearAutosave();checkSummaryStale();
   const btn=document.getElementById('btnSaveRecord');if(btn)btn.classList.remove('visible');document.getElementById('summaryBody').innerHTML='<div class="empty-state"><div class="empty-icon">✨</div><div class="empty-text">文字起こし後に<br>「AI要点整理」を実行すると<br>決定事項・TODOが<br>自動でまとまります</div></div>';}
 function copyTranscript(){const text=utterances.map(u=>'['+fmtSec(u.ts)+'] 【'+u.label+'】'+u.text).join('\n');if(!text.trim()){showToast('err','コピーする文字がありません');return;}navigator.clipboard.writeText(text).then(()=>showToast('ok','📋 クリップボードにコピーしました'));}
 function applyReplace(){if(!utterances.length){showToast('err','発言がありません');return;}const rules=getRules();if(!rules.length){openSpeakerModal();showToast('err','置換ルールが登録されていません');return;}let count=0;utterances=utterances.map(u=>{let t=u.text;for(const r of rules){const re=new RegExp(r.from.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g');const m=t.match(re);if(m)count+=m.length;t=t.replace(re,r.to);}return{...u,text:t};});renderBubbles();updateTranscriptUI();showToast('ok','✅ '+count+' 箇所を置換しました');}
@@ -21186,7 +21229,7 @@ async function runAI(){
     if(!res.ok){const err=await res.json();throw new Error(err.error?.message||'APIエラー');}
     const data=await res.json(),raw=data.content[0]?.text||'',m=raw.match(/\{[\s\S]*\}/);
     const result=JSON.parse(m?m[0]:raw);
-    renderSummary(result);saveHistory(text,result);showToast('ok','✅ AI要点整理が完了しました');
+    renderSummary(result);saveHistory(text,result);lastSummaryTranscript=text;checkSummaryStale();showToast('ok','✅ AI要点整理が完了しました');
   }catch(e){showToast('err','❌ エラー: '+e.message);sb.innerHTML='<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">'+escHtml(e.message)+'</div></div>';}
   finally{btn.disabled=false;btn.innerHTML='✨ AI要点整理を実行';}
 }
@@ -21244,6 +21287,8 @@ function loadHistory(id){
   if(badge) badge.textContent=h.sceneLabel;
   renderBubbles();
   updateCharCount();
+  // 保存済みサマリーがあればその時点の文字起こしを基準として記録しておく（読み込み直後に警告が出ないように）
+  lastSummaryTranscript = h.summary ? (h.transcript||'').trim() : null;
   updateTranscriptUI();
   // summaryがある場合のみ表示
   if(h.summary){
@@ -21415,8 +21460,30 @@ function deleteRule(i){const rules=getRules();rules.splice(i,1);saveRules(rules)
 let toastTimer=null;
 function showToast(type,msg){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+type+' show';clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),type==='err'?6000:3500);}
 
-function saveVocab(){localStorage.setItem('vm_vocab', document.getElementById('vocabInput').value);}
-function loadVocab(){const el=document.getElementById('vocabInput'); if(el) el.value = localStorage.getItem('vm_vocab')||'';}
+function saveVocab(){localStorage.setItem('vm_vocab', document.getElementById('vocabInput').value);updateVocabCharCount();}
+function loadVocab(){const el=document.getElementById('vocabInput'); if(el) el.value = localStorage.getItem('vm_vocab')||'';updateVocabCharCount();}
+// Whisperのprompt欄はトークン数に上限があり（目安 約244トークン）、
+// 詰め込みすぎると後半の単語が効かなくなる。文字数で簡易的に目安表示する。
+const VOCAB_WARN_CHARS = 200;
+function updateVocabCharCount(){
+  const el=document.getElementById('vocabInput'), out=document.getElementById('vocabCharCount');
+  if(!el||!out) return;
+  const len=el.value.length;
+  out.textContent=len+'文字';
+  out.classList.toggle('warn', len>VOCAB_WARN_CHARS);
+  out.title = len>VOCAB_WARN_CHARS ? '多すぎると後半の単語が効きにくくなります。重要な語を優先してください' : '';
+}
+// 保育施設の会議・記録で読み違いが起きやすい定番用語をまとめて追加する（重複は除く）
+const VOCAB_PRESET_WORDS = ['週案','月案','延長番','申し送り','園庭','保育士','登園','降園','午睡','連絡帳'];
+function addPresetVocab(){
+  const el=document.getElementById('vocabInput'); if(!el) return;
+  const existing=el.value.split(/[、,]/).map(s=>s.trim()).filter(Boolean);
+  const toAdd=VOCAB_PRESET_WORDS.filter(w=>!existing.includes(w));
+  if(!toAdd.length){ showToast('ok','ℹ️ すでにすべて登録されています'); return; }
+  el.value = existing.concat(toAdd).join('、');
+  saveVocab();
+  showToast('ok','✅ '+toAdd.length+'件の用語を追加しました');
+}
 function normalizeJaPunctuation(t){
   t=(t||'').trim();
   if(!t) return t;
