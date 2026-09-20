@@ -21225,7 +21225,7 @@ async function runAI(){
   const btn=document.getElementById('btnAI');btn.disabled=true;btn.innerHTML='<div class="spinner"></div> 分析中…';
   const sb=document.getElementById('summaryBody');sb.innerHTML='<div class="empty-state"><div class="empty-icon" style="animation:spin 1s linear infinite;display:inline-block">⚙️</div><div class="empty-text" style="margin-top:10px">Claude AIが分析しています…</div></div>';
   try{
-    const res=await fetch('https://voiceminutes-proxy.cryk0289.workers.dev/claude',{method:'POST',headers:{'Content-Type':'application/json','X-Anthropic-Key':apiKey},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,system:SCENE_PROMPTS[currentScene],messages:[{role:'user',content:'以下の文字起こしテキストを整理してください。\n\n'+text}]})});
+    const res=await fetch('https://voiceminutes-proxy.cryk0289.workers.dev/claude',{method:'POST',headers:{'Content-Type':'application/json','X-Anthropic-Key':apiKey},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4000,system:SCENE_PROMPTS[currentScene],messages:[{role:'user',content:'以下の文字起こしテキストを整理してください。\n\n'+text}]})});
     if(!res.ok){const err=await res.json();throw new Error(err.error?.message||'APIエラー');}
     const data=await res.json(),raw=data.content[0]?.text||'',m=raw.match(/\{[\s\S]*\}/);
     const result=JSON.parse(m?m[0]:raw);
