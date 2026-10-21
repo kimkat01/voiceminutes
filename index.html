@@ -21224,7 +21224,8 @@ async function runAI(){
     if(!res.ok){const err=await res.json();throw new Error(err.error?.message||'APIエラー');}
     const data=await res.json(),raw=data.content[0]?.text||'',m=raw.match(/\{[\s\S]*\}/);
     const result=JSON.parse(m?m[0]:raw);
-    renderSummary(result);saveHistory(text,result);lastSummaryTranscript=text;checkSummaryStale();showToast('ok','✅ AI要点整理が完了しました');
+    renderSummary(result);saveHistory(text,result);lastSummaryTranscript=text;
+    try{ if(window.ShiodomeLog) ShiodomeLog.post('園長','文字起こし'); }catch(e){}checkSummaryStale();showToast('ok','✅ AI要点整理が完了しました');
   }catch(e){showToast('err','❌ エラー: '+e.message);sb.innerHTML='<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">'+escHtml(e.message)+'</div></div>';}
   finally{btn.disabled=false;btn.innerHTML='✨ AI要点整理を実行';}
 }
@@ -21645,5 +21646,7 @@ bindWhisperZone();
 </script>
 <!-- しおどめポータルサイトから開いたときだけ、左下に「ログアウト」（ポータルへ戻る）ボタンを出す -->
 <script src="https://kimkat01.github.io/shiodome-knowledge/portal-back.js"></script>
+<!-- 利用状況（2026-10-21）：AI要点整理（議事録作成）をしたら、本部の利用状況に「投稿」として記録する -->
+<script src="https://kimkat01.github.io/staff-dashboard/access-log.js"></script>
 </body>
 </html>
