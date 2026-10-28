@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VoiceMinutes v2.5｜音声記録・要点整理</title>
+<title>VoiceMinutes v2.6｜音声記録・要点整理</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 
@@ -20553,6 +20553,8 @@ var __async = (__this, __arguments, generator) => {
 }({});
 
 </script>
+<!-- 園マスタ（?garden=園キー から園を判定する。職員名簿の読み込みに使う） -->
+<script src="https://kimkat01.github.io/staff-dashboard/gardens.js"></script>
 </head>
 <body>
 <header class="header">
@@ -20565,7 +20567,8 @@ var __async = (__this, __arguments, generator) => {
       <button class="btn-sm" onclick="toggleVocabPanel()">🔤 用語登録</button>
       <div class="vocab-dropdown-panel" id="vocabDropdownPanel">
         <div class="vocab-dropdown-title">固有名詞・専門用語（読み違い防止）</div>
-        <div class="vocab-dropdown-desc">✅ 午睡・降園・加配・要録などの<b>保育用語は、最初から自動で認識・補正されます</b>（入力不要）。<br>💡 ここには<b>職員の名前・園名・行事名・クラス名</b>など、園独自の言葉を読点（、）区切りで入れてください。</div>
+        <div class="vocab-dropdown-desc">✅ 午睡・降園・加配・要録などの<b>保育用語</b>と、<b>この園の職員の名前</b>（ポータルから開いたとき）は、最初から自動で認識・補正されます（入力不要）。<br>💡 ここには<b>園名・行事名・クラス名・名簿にない人の名前</b>など、園独自の言葉を読点（、）区切りで入れてください。</div>
+        <div class="vocab-hint" id="vmRosterStatus" style="margin:0 0 8px;padding:7px 10px;border-radius:10px;background:var(--surface2);color:var(--text2);font-size:11px;line-height:1.6;">👥 職員名簿：確認中…</div>
         <textarea class="vocab-input" id="vocabInput" rows="3" placeholder="例：木村、ゆき子、しおどめ保育園、三郷中央、ひよこ組、ふれあい祭り" oninput="saveVocab()"></textarea>
         <div class="vocab-dropdown-foot">
           <span class="vocab-hint" style="margin-top:0;">重要な言葉から先に入れてください</span>
@@ -21220,7 +21223,7 @@ async function runAI(){
   const btn=document.getElementById('btnAI');btn.disabled=true;btn.innerHTML='<div class="spinner"></div> 分析中…';
   const sb=document.getElementById('summaryBody');sb.innerHTML='<div class="empty-state"><div class="empty-icon" style="animation:spin 1s linear infinite;display:inline-block">⚙️</div><div class="empty-text" style="margin-top:10px">Claude AIが分析しています…</div></div>';
   try{
-    const res=await fetch('https://voiceminutes-proxy.cryk0289.workers.dev/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4000,system:SCENE_PROMPTS[currentScene]+'\n\n【参考：保育用語辞書】文字起こしに誤変換が残っている場合は、次の辞書の正しい表記で整理してください（文脈から明らかな場合のみ）。\n'+HOIKU_GLOSSARY+(getUserVocabWords().length?'\n【この園の登録語】'+getUserVocabWords().join('、'):''),messages:[{role:'user',content:'以下の文字起こしテキストを整理してください。\n\n'+text}]})});
+    const res=await fetch('https://voiceminutes-proxy.cryk0289.workers.dev/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4000,system:SCENE_PROMPTS[currentScene]+'\n\n【参考：保育用語辞書】文字起こしに誤変換が残っている場合は、次の辞書の正しい表記で整理してください（文脈から明らかな場合のみ）。\n'+HOIKU_GLOSSARY+(getRosterText()?'\n【この園の職員名簿】'+getRosterText():'')+(getUserVocabWords().length?'\n【この園の登録語】'+getUserVocabWords().join('、'):''),messages:[{role:'user',content:'以下の文字起こしテキストを整理してください。\n\n'+text}]})});
     if(!res.ok){const err=await res.json();throw new Error(err.error?.message||'APIエラー');}
     const data=await res.json(),raw=data.content[0]?.text||'',m=raw.match(/\{[\s\S]*\}/);
     const result=JSON.parse(m?m[0]:raw);
@@ -21490,6 +21493,91 @@ const HOIKU_GLOSSARY = `
 職員会議、乳児会議、幼児会議、ケース会議、園内研修、OJT、コドモン、本部、理事長、法人、学校法人、社会福祉法人、柴学園、雄雅会、しおどめ
 `.trim();
 
+// ============================================================
+// 職員名簿（v2.6 追加）
+// ・しおどめポータルサイトの「文字起こし」から開くと、URLに園（?garden=園キー）が付き、
+//   ポータルが通行証（ログイン用GASが発行したもの）を10分だけ有効な引き継ぎメモ（localStorage: vm_handoff）で渡す
+// ・その通行証で、ログイン用GAS（action=staffNames）から、その園の在職職員の「氏名・ふりがな」を受け取る
+// ・名簿はこのページを開いている間だけメモリに持つ（ブラウザには保存しない）
+// ・使い道：Whisperへのヒント＝下の名前／文字起こし後のClaude補正・要点整理＝氏名＋ふりがな
+// ============================================================
+const LOGIN_GAS_URL = 'https://script.google.com/macros/s/AKfycbwnTzHQ5XdHPPLdf9QnWJLA-Dc7oBIYzfr1MfFd-Uunyarw0QWc48WzzAme6hR1muBisg/exec';
+const WHISPER_HINT_MAX_CHARS = 160;   // Whisperに渡すヒント全体の文字数の目安（超えたら保育用語から省く）
+let STAFF_ROSTER = [];                // [{name:'木村 ゆき子', kana:'きむら ゆきこ'}]
+let ROSTER_GARDEN = null;             // {code,key,name}
+
+function vmGarden(){
+  try{ return (typeof gardenFromUrl==='function') ? gardenFromUrl() : null; }catch(e){ return null; }
+}
+// 通行証を探す：①ポータルからの引き継ぎメモ（このタブ用に sessionStorage へ移す）②このタブで受け取り済み ③ポータルの30日ログイン
+function readVmAuth(g){
+  try{
+    const h=JSON.parse(localStorage.getItem('vm_handoff')||'null');
+    if(h){
+      localStorage.removeItem('vm_handoff');
+      if(h.exp>Date.now() && h.key===g.key && h.token) sessionStorage.setItem('vm_auth__'+g.key, JSON.stringify({token:h.token}));
+    }
+  }catch(e){}
+  try{ const s=JSON.parse(sessionStorage.getItem('vm_auth__'+g.key)||'null'); if(s && s.token) return s.token; }catch(e){}
+  try{
+    const k=JSON.parse(localStorage.getItem('kb_encho_login__'+g.key)||'null');
+    if(k && k.token && (!k.exp || Date.now()<=k.exp)) return k.token;
+  }catch(e){}
+  return '';
+}
+function setRosterStatus(text){
+  const el=document.getElementById('vmRosterStatus'); if(el) el.innerHTML=text;
+}
+async function loadStaffRoster(){
+  const g=vmGarden();
+  ROSTER_GARDEN=g;
+  if(!g){ setRosterStatus('👥 職員名簿：しおどめポータルサイトの「文字起こし」から開くと、園の職員の名前を自動で読み込みます。'); return; }
+  const token=readVmAuth(g);
+  if(!token){ setRosterStatus('👥 職員名簿：使うには、しおどめポータルサイトに<b>一度ログインし直してから</b>「文字起こし」を開いてください。'); return; }
+  setRosterStatus('👥 職員名簿：'+escHtml(g.name)+'の名簿を読み込み中…');
+  try{
+    const res=await fetch(LOGIN_GAS_URL,{method:'POST',body:JSON.stringify({action:'staffNames',token:token,garden:g.name}),redirect:'follow'});
+    const d=JSON.parse(await res.text());
+    if(d && d.ok){
+      STAFF_ROSTER=(d.staff||[]).filter(s=>s && s.name);
+      if(STAFF_ROSTER.length){
+        setRosterStatus('👥 職員名簿：<b>'+escHtml(g.name)+'の'+STAFF_ROSTER.length+'名</b>を読み込み済み（名前の聞き間違いを自動で防ぎます）');
+        showToast('ok','👥 職員名簿（'+STAFF_ROSTER.length+'名）を読み込みました');
+      }else{
+        setRosterStatus('👥 職員名簿：この園はまだ職員マスタに登録されていません。名前は下の欄に入れてください。');
+      }
+      return;
+    }
+    if(d && (d.error==='auth' || d.error==='garden')){
+      try{ sessionStorage.removeItem('vm_auth__'+g.key); }catch(e){}
+      setRosterStatus('👥 職員名簿：使うには、しおどめポータルサイトに<b>一度ログインし直してから</b>「文字起こし」を開いてください。');
+      return;
+    }
+    setRosterStatus('👥 職員名簿：読み込めませんでした（文字起こしはこのまま使えます）。');
+  }catch(e){
+    setRosterStatus('👥 職員名簿：読み込めませんでした（文字起こしはこのまま使えます）。');
+  }
+}
+// 氏名を「苗字」「下の名前」に分ける（全角・半角スペース区切り。区切りがなければ分けない）
+function splitJaName(n){
+  const p=String(n||'').trim().split(/[\s\u3000]+/).filter(Boolean);
+  return p.length>=2 ? {family:p[0], given:p.slice(1).join('')} : {family:'', given:''};
+}
+// Whisperへのヒント用：下の名前（重複なし）。区切りのない氏名はそのまま使う
+function getRosterGivenNames(){
+  const out=[];
+  STAFF_ROSTER.forEach(s=>{
+    const sp=splitJaName(s.name);
+    const w=sp.given || String(s.name).replace(/[\s\u3000]+/g,'');
+    if(w && !out.includes(w)) out.push(w);
+  });
+  return out;
+}
+// Claude補正・要点整理用：「木村 ゆき子（きむら ゆきこ）」を読点区切りで
+function getRosterText(){
+  return STAFF_ROSTER.map(s=>s.kana ? s.name+'（'+s.kana+'）' : s.name).join('、');
+}
+
 // 職員が「用語登録」欄に入れた語（カンマ・読点区切り）を配列で返す
 function getUserVocabWords(){
   return (localStorage.getItem('vm_vocab')||'').split(/[、,，\s]+/).map(s=>s.trim()).filter(Boolean);
@@ -21516,7 +21604,8 @@ function buildCorrectionSystemPrompt(){
     'あなたは保育園・認定こども園の会議を文字起こししたテキストを整える専門家です。',
     '次の2つだけを行ってください。',
     '1. 読点（、）と句点（。）を自然な位置に追加する。',
-    '2. 音声認識の誤変換を直す。下の【保育用語辞書】と【この園の登録語】にある語が、同じ読み・似た音の別の漢字や語に誤変換されていると文脈から明らかな場合に限り、正しい表記に直す。辞書の（ ）内は「よみ：よくある誤変換」の例。',
+    '2. 音声認識の誤変換を直す。下の【保育用語辞書】【この園の職員名簿】【この園の登録語】にある語が、同じ読み・似た音の別の漢字や語に誤変換されていると文脈から明らかな場合に限り、正しい表記に直す。辞書の（ ）内は「よみ：よくある誤変換」の例。',
+    '   職員の名前は、名簿の（ ）内のふりがなと読みが一致するものを名簿どおりの漢字に直す。「〇〇先生」「〇〇さん」のように苗字だけ・下の名前だけで呼ばれることも多い。名簿にない名前は推測で名簿の人に置き換えない。',
     '厳守事項：',
     '・言葉遣い・語順・内容・話し言葉の口調は変えない。要約・言い換え・補足・削除をしない。',
     '・誤変換かどうか迷う場合は直さない（例：「公園」が散歩先の公園の意味なら「降園」に直さない）。',
@@ -21525,6 +21614,9 @@ function buildCorrectionSystemPrompt(){
     '',
     '【保育用語辞書】',
     HOIKU_GLOSSARY,
+    '',
+    '【この園の職員名簿】',
+    getRosterText() || '（なし）',
     '',
     '【この園の登録語（人名・施設名など）】',
     userWords.length ? userWords.join('、') : '（なし）'
@@ -21646,11 +21738,16 @@ function collapseRepetition(t){
 function getVocabPrompt(){
   // 説明文・指示文はWhisperの幻覚（プロンプトの文章をオウム返しする現象）を誘発するため使わない。
   // 固有名詞・専門用語のヒントのみを渡す（句読点は別途Claudeで後付けするためここでは指示しない）。
-  // 保育の基本用語（自動）を先頭、職員の登録語を後ろに置く。
-  // Whisperは上限を超えると先頭側を切り捨てるため、園ごとに大事な登録語（人名など）を後ろにして必ず残す。
+  // 並び：保育の基本用語（自動）→ 職員の下の名前（名簿・自動）→ 職員が登録した語。
+  // Whisperは上限を超えると先頭側を切り捨てるため、大事なもの（登録語・名前）を後ろに置き、
+  // さらにこちらでも文字数の上限（WHISPER_HINT_MAX_CHARS）を超えたら先頭（保育用語）から省く。
+  // 省いた保育用語も、文字起こし後のClaude補正（保育用語辞書）で直るので心配ない。
   const user=getUserVocabWords();
-  const base=HOIKU_WHISPER_HINT.filter(w=>!user.includes(w));
-  return base.concat(user).join('、');
+  const given=getRosterGivenNames().filter(w=>!user.includes(w));
+  const base=HOIKU_WHISPER_HINT.filter(w=>!user.includes(w)&&!given.includes(w));
+  const words=base.concat(given, user);
+  while(words.length>1 && words.join('、').length>WHISPER_HINT_MAX_CHARS) words.shift();
+  return words.join('、');
 }
 function toggleVocabPanel(){document.getElementById('vocabDropdownPanel').classList.toggle('open');}
 document.addEventListener('click',function(e){
@@ -21664,6 +21761,7 @@ restoreAutosaveIfAny(); // 前回タブが落ちた等で自動保存が残っ�
 
 refreshWhisperKeyStatus();
 loadVocab();
+loadStaffRoster();
 if(!window.SpeechRecognition&&!window.webkitSpeechRecognition){setTimeout(()=>showToast('err','⚠ このブラウザはリアルタイム文字起こしに非対応です。Chrome / Edge をお使いください'),800);}
 
 // Whisperファイル入力の初期バインド
