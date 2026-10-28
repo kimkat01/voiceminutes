@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VoiceMinutes v2.3｜音声記録・要点整理</title>
+<title>VoiceMinutes v2.5｜音声記録・要点整理</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 
@@ -20565,10 +20565,10 @@ var __async = (__this, __arguments, generator) => {
       <button class="btn-sm" onclick="toggleVocabPanel()">🔤 用語登録</button>
       <div class="vocab-dropdown-panel" id="vocabDropdownPanel">
         <div class="vocab-dropdown-title">固有名詞・専門用語（読み違い防止）</div>
-        <div class="vocab-dropdown-desc">💡 人名・施設名・専門用語などをカンマ区切りで入力しておくと、Whisperの認識精度が上がります。よく間違われる言葉ほど効果があります。</div>
-        <textarea class="vocab-input" id="vocabInput" rows="3" placeholder="例：木村、ゆき子、しおどめ保育園、三郷中央、週案、延長番、園庭、申し送り" oninput="saveVocab()"></textarea>
+        <div class="vocab-dropdown-desc">✅ 午睡・降園・加配・要録などの<b>保育用語は、最初から自動で認識・補正されます</b>（入力不要）。<br>💡 ここには<b>職員の名前・園名・行事名・クラス名</b>など、園独自の言葉を読点（、）区切りで入れてください。</div>
+        <textarea class="vocab-input" id="vocabInput" rows="3" placeholder="例：木村、ゆき子、しおどめ保育園、三郷中央、ひよこ組、ふれあい祭り" oninput="saveVocab()"></textarea>
         <div class="vocab-dropdown-foot">
-          <button type="button" class="vocab-preset-btn" onclick="addPresetVocab()">＋保育でよくある用語を追加</button>
+          <span class="vocab-hint" style="margin-top:0;">重要な言葉から先に入れてください</span>
           <span class="vocab-charcount" id="vocabCharCount"></span>
         </div>
       </div>
@@ -21220,7 +21220,7 @@ async function runAI(){
   const btn=document.getElementById('btnAI');btn.disabled=true;btn.innerHTML='<div class="spinner"></div> 分析中…';
   const sb=document.getElementById('summaryBody');sb.innerHTML='<div class="empty-state"><div class="empty-icon" style="animation:spin 1s linear infinite;display:inline-block">⚙️</div><div class="empty-text" style="margin-top:10px">Claude AIが分析しています…</div></div>';
   try{
-    const res=await fetch('https://voiceminutes-proxy.cryk0289.workers.dev/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4000,system:SCENE_PROMPTS[currentScene],messages:[{role:'user',content:'以下の文字起こしテキストを整理してください。\n\n'+text}]})});
+    const res=await fetch('https://voiceminutes-proxy.cryk0289.workers.dev/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4000,system:SCENE_PROMPTS[currentScene]+'\n\n【参考：保育用語辞書】文字起こしに誤変換が残っている場合は、次の辞書の正しい表記で整理してください（文脈から明らかな場合のみ）。\n'+HOIKU_GLOSSARY+(getUserVocabWords().length?'\n【この園の登録語】'+getUserVocabWords().join('、'):''),messages:[{role:'user',content:'以下の文字起こしテキストを整理してください。\n\n'+text}]})});
     if(!res.ok){const err=await res.json();throw new Error(err.error?.message||'APIエラー');}
     const data=await res.json(),raw=data.content[0]?.text||'',m=raw.match(/\{[\s\S]*\}/);
     const result=JSON.parse(m?m[0]:raw);
@@ -21458,9 +21458,42 @@ function showToast(type,msg){const t=document.getElementById('toast');t.textCont
 
 function saveVocab(){localStorage.setItem('vm_vocab', document.getElementById('vocabInput').value);updateVocabCharCount();}
 function loadVocab(){const el=document.getElementById('vocabInput'); if(el) el.value = localStorage.getItem('vm_vocab')||'';updateVocabCharCount();}
-// Whisperのprompt欄はトークン数に上限があり（目安 約244トークン）、
+// Whisperのprompt欄はトークン数に上限があり（目安 約224トークン）、
 // 詰め込みすぎると後半の単語が効かなくなる。文字数で簡易的に目安表示する。
-const VOCAB_WARN_CHARS = 200;
+// ※保育の基本用語（HOIKU_WHISPER_HINT）が自動で先頭に入るため、職員入力分の目安は少なめにしている。
+const VOCAB_WARN_CHARS = 120;
+
+// ============================================================
+// 保育用語辞書（v2.5 追加）
+// ① HOIKU_WHISPER_HINT … Whisperに毎回自動で渡す「特に誤変換されやすい語」（文字数制限があるため厳選）
+// ② HOIKU_GLOSSARY     … 文字起こし後にClaudeが誤変換を直すときに参照する辞書（制限がほぼないので広く収録）
+//    書式：正しい表記（よみ：よくある誤変換）※よみ・誤変換は分かるものだけ
+// ============================================================
+const HOIKU_WHISPER_HINT = ['午睡','登園','降園','加配','延長番','週案','月案','日案','要録','与薬','下膳','清拭','沐浴','喃語','視診','園庭','申し送り','連絡帳','未満児','以上児','補食','除去食','誤食','ヒヤリハット','指導計画','5領域','コドモン'];
+
+const HOIKU_GLOSSARY = `
+【日々の保育】
+登園（とうえん）、降園（こうえん：公園・講演）、午睡（ごすい：ご水・五衰・後衰）、午睡チェック、ブレスチェック、視診（ししん：指針・私信）、触診、検温、排泄（はいせつ）、トイレトレーニング、おむつ替え、沐浴（もくよく）、清拭（せいしき：正式）、着脱（ちゃくだつ）、食事援助、配膳、下膳（げぜん：下膳・外前）、補食（ほしょく：捕食）、おやつ、手洗い、うがい、園庭（えんてい：園帝）、戸外遊び（こがいあそび：戸外・個外）、室内遊び、設定保育、自由遊び、園外保育、散歩、朝の会、帰りの会、お迎え、引き渡し、申し送り（もうしおくり）、連絡帳、園だより、クラスだより、おたより
+【勤務・体制】
+早番（はやばん）、中番（なかばん）、遅番（おそばん）、延長番（えんちょうばん：園長番）、延長保育、土曜保育、一時保育、シフト、勤怠、有休、有給休暇、産休、育休、時短、正規職員、パート、常勤、非常勤、常勤換算、加配（かはい：可配・化配）、加配保育士、保育補助、子育て支援員、保育士、保育教諭、幼稚園教諭、栄養士、調理員、看護師、園長、副園長、主任（しゅにん）、副主任、専門リーダー、職務分野別リーダー、キャリアアップ研修、処遇改善、配置基準
+【計画・記録】
+全体的な計画、指導計画、年間指導計画、月案（げつあん：月安）、週案（しゅうあん：週安・終案）、日案（にちあん）、個別指導計画、個別支援計画、保育日誌、保育経過記録、児童票、保育要録（ようろく：様録・用録）、指導要録、幼保連携型認定こども園園児指導要録、ねらい、環境構成、援助、配慮、振り返り、自己評価、園評価、第三者評価、保育の質
+【制度・法令】
+保育所保育指針（ほいくしょほいくししん）、幼稚園教育要領、幼保連携型認定こども園教育・保育要領、5領域（ごりょういき）、健康、人間関係、環境、言葉、表現、10の姿、幼児期の終わりまでに育ってほしい姿、養護（ようご）、生命の保持、情緒の安定、認定こども園、1号認定、2号認定、3号認定、施設型給付、給付費、公定価格、加算、こども家庭庁、指導監査、実地検査、こども性暴力防止法、日本版DBS
+【子ども・発達】
+乳児、幼児、未満児（みまんじ）、以上児（いじょうじ）、0歳児、1歳児、2歳児、3歳児、4歳児、5歳児、異年齢保育、縦割り保育、発達、発達支援、気になる子、要配慮児、個別支援、療育、児童発達支援、巡回相談、喃語（なんご：何語・南語）、ハイハイ、つかまり立ち、伝い歩き、イヤイヤ期、自我、愛着、アタッチメント、人見知り、後追い、噛みつき、ひっかき
+【食事・健康・安全】
+離乳食（りにゅうしょく）、初期、中期、後期、完了期、幼児食、刻み食、食物アレルギー、除去食（じょきょしょく）、代替食、誤食（ごしょく：誤植・五色）、誤嚥（ごえん：誤縁・ご縁）、窒息、アナフィラキシー、エピペン、与薬（よやく：予約）、与薬依頼書、SIDS、乳幼児突然死症候群、うつぶせ寝、感染症、登園届、意見書、嘔吐（おうと）、下痢、発熱、ノロウイルス、RSウイルス、手足口病、ヘルパンギーナ、溶連菌、とびひ、水いぼ、インフルエンザ、ヒヤリハット、事故報告書、AED、避難訓練、引き渡し訓練、不審者対応訓練、BCP、不適切保育、虐待、通告、児童相談所、要保護児童対策地域協議会、保健センター
+【行事・保護者】
+入園式、卒園式、進級式、修了式、運動会、発表会、生活発表会、お遊戯会（おゆうぎかい）、夏祭り、七夕、お月見、ハロウィン、クリスマス会、節分、豆まき、ひな祭り、こどもの日、誕生会、遠足、芋掘り、プール、水遊び、保育参観、保育参加、個人面談、懇談会、保護者会、入園説明会、園見学
+【会議・法人】
+職員会議、乳児会議、幼児会議、ケース会議、園内研修、OJT、コドモン、本部、理事長、法人、学校法人、社会福祉法人、柴学園、雄雅会、しおどめ
+`.trim();
+
+// 職員が「用語登録」欄に入れた語（カンマ・読点区切り）を配列で返す
+function getUserVocabWords(){
+  return (localStorage.getItem('vm_vocab')||'').split(/[、,，\s]+/).map(s=>s.trim()).filter(Boolean);
+}
 function updateVocabCharCount(){
   const el=document.getElementById('vocabInput'), out=document.getElementById('vocabCharCount');
   if(!el||!out) return;
@@ -21469,23 +21502,33 @@ function updateVocabCharCount(){
   out.classList.toggle('warn', len>VOCAB_WARN_CHARS);
   out.title = len>VOCAB_WARN_CHARS ? '多すぎると後半の単語が効きにくくなります。重要な語を優先してください' : '';
 }
-// 保育施設の会議・記録で読み違いが起きやすい定番用語をまとめて追加する（重複は除く）
-const VOCAB_PRESET_WORDS = ['週案','月案','延長番','申し送り','園庭','保育士','登園','降園','午睡','連絡帳'];
-function addPresetVocab(){
-  const el=document.getElementById('vocabInput'); if(!el) return;
-  const existing=el.value.split(/[、,]/).map(s=>s.trim()).filter(Boolean);
-  const toAdd=VOCAB_PRESET_WORDS.filter(w=>!existing.includes(w));
-  if(!toAdd.length){ showToast('ok','ℹ️ すでにすべて登録されています'); return; }
-  el.value = existing.concat(toAdd).join('、');
-  saveVocab();
-  showToast('ok','✅ '+toAdd.length+'件の用語を追加しました');
-}
 function normalizeJaPunctuation(t){
   t=(t||'').trim();
   if(!t) return t;
   // 文末に句読点がなければ「。」を補う（最低限の保険）
   if(!/[。！？…」』）\.\?!]$/.test(t)) t+='。';
   return t;
+}
+// 文字起こし後の補正（句読点＋保育用語・登録語の誤変換修正）に使うシステムプロンプト
+function buildCorrectionSystemPrompt(){
+  const userWords = getUserVocabWords();
+  return [
+    'あなたは保育園・認定こども園の会議を文字起こししたテキストを整える専門家です。',
+    '次の2つだけを行ってください。',
+    '1. 読点（、）と句点（。）を自然な位置に追加する。',
+    '2. 音声認識の誤変換を直す。下の【保育用語辞書】と【この園の登録語】にある語が、同じ読み・似た音の別の漢字や語に誤変換されていると文脈から明らかな場合に限り、正しい表記に直す。辞書の（ ）内は「よみ：よくある誤変換」の例。',
+    '厳守事項：',
+    '・言葉遣い・語順・内容・話し言葉の口調は変えない。要約・言い換え・補足・削除をしない。',
+    '・誤変換かどうか迷う場合は直さない（例：「公園」が散歩先の公園の意味なら「降園」に直さない）。',
+    '・辞書にない語を推測で別の語に置き換えない。',
+    '・前置きや説明は不要。修正後の文章のみを出力する。',
+    '',
+    '【保育用語辞書】',
+    HOIKU_GLOSSARY,
+    '',
+    '【この園の登録語（人名・施設名など）】',
+    userWords.length ? userWords.join('、') : '（なし）'
+  ].join('\n');
 }
 async function punctuateText(text){
   text=(text||'').trim();
@@ -21496,8 +21539,8 @@ async function punctuateText(text){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         model:'claude-sonnet-4-6',
-        max_tokens:500,
-        system:'あなたは日本語の文字起こしテキストに句読点を追加する専門家です。入力された文章の言葉遣い・語順・内容は一切変えず、読点（、）と句点（。）だけを自然な位置に追加してください。前置きや説明は不要です。修正後の文章のみをそのまま出力してください。',
+        max_tokens:1000,
+        system:buildCorrectionSystemPrompt(),
         messages:[{role:'user',content:text}]
       })
     });
@@ -21603,8 +21646,11 @@ function collapseRepetition(t){
 function getVocabPrompt(){
   // 説明文・指示文はWhisperの幻覚（プロンプトの文章をオウム返しする現象）を誘発するため使わない。
   // 固有名詞・専門用語のヒントのみを渡す（句読点は別途Claudeで後付けするためここでは指示しない）。
-  const words=(localStorage.getItem('vm_vocab')||'').trim();
-  return words;
+  // 保育の基本用語（自動）を先頭、職員の登録語を後ろに置く。
+  // Whisperは上限を超えると先頭側を切り捨てるため、園ごとに大事な登録語（人名など）を後ろにして必ず残す。
+  const user=getUserVocabWords();
+  const base=HOIKU_WHISPER_HINT.filter(w=>!user.includes(w));
+  return base.concat(user).join('、');
 }
 function toggleVocabPanel(){document.getElementById('vocabDropdownPanel').classList.toggle('open');}
 document.addEventListener('click',function(e){
