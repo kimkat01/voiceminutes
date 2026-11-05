@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VoiceMinutes v2.9｜音声記録・要点整理</title>
+<title>VoiceMinutes v2.10｜音声記録・要点整理</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 
@@ -21589,6 +21589,16 @@ function getRosterGivenNames(){
   });
   return out;
 }
+// ── 園ごとのクラス名（v2.10 追加）──
+// 施設コードごとに書く。年度替わりでクラス名が変わったらここを直す。
+// ポータルの「文字起こし」から開いたとき（URLに園が付くとき）だけ使う。
+const GARDEN_CLASSES = {
+  S10: ['ほし組','そら組','つき組','にじ組','ひかり組']   // しおどめ保育園つくば
+};
+function getGardenClasses(){
+  const g=vmGarden();
+  return (g && GARDEN_CLASSES[g.code]) || [];
+}
 // Claude補正・要点整理用：「木村 ゆき子（きむら ゆきこ）」を読点区切りで
 function getRosterText(){
   return STAFF_ROSTER.map(s=>s.kana ? s.name+'（'+s.kana+'）' : s.name).join('、');
@@ -21622,6 +21632,7 @@ function buildCorrectionSystemPrompt(){
     '次の2つだけを行ってください。',
     '1. 読点（、）と句点（。）を自然な位置に追加する。',
     '2. 音声認識の誤変換を直す。下の【保育用語辞書】【この園の職員名簿】【この園の登録語】にある語が、同じ読み・似た音の別の漢字や語に誤変換されていると文脈から明らかな場合に限り、正しい表記に直す。辞書の（ ）内は「よみ：よくある誤変換」の例。',
+    '   クラス名は、【この園のクラス名】の名前の直後に「組」「ぐみ」「クラス」が続くときだけ直す（例：「星組」「ほしぐみ」→「ほし組」、「星クラス」→「ほしクラス」）。「空がきれい」「お月見」のように、普通の言葉として使われている場合は直さない。',
     '   職員の名前は、名簿の（ ）内のふりがなと読みが一致するものを名簿どおりの漢字に直す。「〇〇先生」「〇〇さん」のように苗字だけ・下の名前だけで呼ばれることも多い。名簿にない名前は推測で名簿の人に置き換えない。',
     '厳守事項：',
     '・言葉遣い・語順・内容・話し言葉の口調は変えない。要約・言い換え・補足・削除をしない。',
@@ -21634,6 +21645,9 @@ function buildCorrectionSystemPrompt(){
     '',
     '【この園の職員名簿】',
     getRosterText() || '（なし）',
+    '',
+    '【この園のクラス名】',
+    getGardenClasses().join('、') || '（なし）',
     '',
     '【この園の登録語（人名・施設名など）】',
     userWords.length ? userWords.join('、') : '（なし）'
@@ -21660,6 +21674,11 @@ function getAllowedCorrectionTerms(){
     terms.push(sp.family, sp.given);
   });
   getUserVocabWords().forEach(w=>terms.push(w));
+  // クラス名は「ほし組」「ほしぐみ」「ほしクラス」の形だけ認める（「ほし」単独への置き換えは認めない）
+  getGardenClasses().forEach(c=>{
+    const base=c.replace(/組$/,'');
+    terms.push(c, base+'ぐみ', base+'クラス');
+  });
   return Array.from(new Set(terms.map(stripForCompare).filter(Boolean)));
 }
 // 元の発言 a を b に変える最短の手順を求め、違う部分のリストを返す
@@ -22025,14 +22044,15 @@ function collapseRepetition(t){
 function getVocabPrompt(){
   // 説明文・指示文はWhisperの幻覚（プロンプトの文章をオウム返しする現象）を誘発するため使わない。
   // 固有名詞・専門用語のヒントのみを渡す（句読点は別途Claudeで後付けするためここでは指示しない）。
-  // 並び：保育の基本用語（自動）→ 職員の下の名前（名簿・自動）→ 職員が登録した語。
+  // 並び：保育の基本用語（自動）→ 職員の下の名前（名簿・自動）→ クラス名（自動）→ 職員が登録した語。
   // Whisperは上限を超えると先頭側を切り捨てるため、大事なもの（登録語・名前）を後ろに置き、
   // さらにこちらでも文字数の上限（WHISPER_HINT_MAX_CHARS）を超えたら先頭（保育用語）から省く。
   // 省いた保育用語も、文字起こし後のClaude補正（保育用語辞書）で直るので心配ない。
   const user=getUserVocabWords();
   const given=getRosterGivenNames().filter(w=>!user.includes(w));
-  const base=HOIKU_WHISPER_HINT.filter(w=>!user.includes(w)&&!given.includes(w));
-  const words=base.concat(given, user);
+  const classes=getGardenClasses().filter(w=>!user.includes(w)&&!given.includes(w));
+  const base=HOIKU_WHISPER_HINT.filter(w=>!user.includes(w)&&!given.includes(w)&&!classes.includes(w));
+  const words=base.concat(given, classes, user);
   while(words.length>1 && words.join('、').length>WHISPER_HINT_MAX_CHARS) words.shift();
   return words.join('、');
 }
