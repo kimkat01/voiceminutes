@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VoiceMinutes v2.16｜音声記録・要点整理</title>
+<title>VoiceMinutes v2.17｜音声記録・要点整理</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 
@@ -336,6 +336,7 @@
   /* エクスポート */
   .export-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1.5px solid var(--border); }
   .btn-export-minutes { flex: 1 0 100%; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 4px; font-family: inherit; }
+  .btn-export-minutes.is-ready { background: var(--accent); border-color: var(--accent); color: #fff; }
   .btn-export-minutes:disabled { opacity: 0.7; cursor: wait; transform: none; }
   .export-label { font-size: 10px; color: var(--text3); font-weight: 700; flex-shrink: 0; letter-spacing: 0.3px; }
   .btn-export { flex: 1; padding: 6px 4px; border-radius: 20px; border: 1.5px solid var(--border2); background: var(--surface2); color: var(--text2); font-size: 11px; font-weight: 700; cursor: pointer; font-family: 'DM Mono', monospace; transition: all 0.13s; text-align: center; }
@@ -21474,17 +21475,36 @@ async function buildMinutesDocx(mn){
     sections:[{properties:{page:{size:{width:11906,height:16838},margin:{top:1020,right:1134,bottom:1020,left:1134}}},children:c}]});
   return await Packer.toBlob(doc);
 }
+// 保存先の選択画面はその時点で空のファイルを作るため、AIの処理より先に開くと、失敗したときに白紙のファイルが残る。
+// そこで「作成→完成後にもう一度押して保存」の2段階にする（v2.17）
+const MINUTES_BTN_LABEL='📝 議事録にまとめる（Word）';
+let pendingMinutes=null; // {blob, filename, log}
+function setMinutesButton(state){
+  const btn=document.getElementById('btnMinutes'); if(!btn) return;
+  btn.disabled=(state==='busy');
+  btn.classList.toggle('is-ready',state==='ready');
+  btn.innerHTML=state==='busy'?'<div class="spinner"></div> 議事録を作成中…':state==='ready'?'💾 議事録ができました。押して保存':MINUTES_BTN_LABEL;
+}
+async function saveMinutesFile(){
+  const p=pendingMinutes;
+  if(!p || !p.blob || !p.blob.size){showToast('err','❌ 議事録のデータがありません。もう一度作成してください');pendingMinutes=null;setMinutesButton('idle');return;}
+  let handle=null;
+  try{ handle=await pickSaveHandle(p.filename); }catch(e){ if(e && e.name==='AbortError') return; } // キャンセル時は保存待ちのまま
+  await writeToHandleOrDownload(handle,p.blob,p.filename);
+  pendingMinutes=null;
+  setMinutesButton('idle');
+  showToast('ok','✅ 議事録を保存しました。内容を確認してからお使いください');
+}
 async function exportMinutes(){
   const log=buildLogText();if(!log){showToast('err','会話ログがありません');return;}
   if(typeof docx==='undefined'){showToast('err','❌ Word出力ライブラリの読み込みに失敗しました');return;}
   const btn=document.getElementById('btnMinutes');
   if(btn && btn.disabled) return;
-  const filename='Gijiroku_'+formatFilename(getExportMeta().now)+'.docx'; // 日本語名だと環境により名前が失われるため英字にする
-  // 保存先の選択はボタンを押した直後でないと開けないため、AIの処理より先に行う
-  let handle=null;
-  try{ handle=await pickSaveHandle(filename); }catch(e){ if(e && e.name==='AbortError') return; }
-  const label=btn?btn.innerHTML:'';
-  if(btn){btn.disabled=true;btn.innerHTML='<div class="spinner"></div> 議事録を作成中…';}
+  // 完成済みで、その後に会話ログを直していなければ保存へ進む
+  if(pendingMinutes && pendingMinutes.log===log){await saveMinutesFile();return;}
+  pendingMinutes=null;
+  setMinutesButton('busy');
+  let ready=false;
   try{
     const res=await fetch('https://voiceminutes-proxy.cryk0289.workers.dev/claude',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:8000,system:buildMinutesSystemPrompt(),messages:[{role:'user',content:'<transcript>\n'+log+'\n</transcript>'}]})});
@@ -21493,12 +21513,14 @@ async function exportMinutes(){
     if(data.stop_reason==='max_tokens') throw new Error('会議が長く、議事録を最後まで作れませんでした');
     const mn=parseMinutesResponse(data.content&&data.content[0]&&data.content[0].text);
     const blob=await buildMinutesDocx(mn);
-    await writeToHandleOrDownload(handle,blob,filename);
-    showToast('ok','✅ 議事録を出力しました。内容を確認してからお使いください');
+    if(!blob || !blob.size) throw new Error('Wordファイルを作れませんでした');
+    pendingMinutes={blob,filename:'Gijiroku_'+formatFilename(getExportMeta().now)+'.docx',log}; // 日本語名だと環境により名前が失われるため英字にする
+    ready=true;
+    showToast('ok','✅ 議事録ができました。もう一度ボタンを押して保存してください');
   }catch(e){
     showToast('err','❌ 議事録の作成エラー: '+e.message);
   }finally{
-    if(btn){btn.disabled=false;btn.innerHTML=label;}
+    setMinutesButton(ready?'ready':'idle');
   }
 }
 async function pickSaveHandle(filename){
