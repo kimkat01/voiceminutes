@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VoiceMinutes v2.12｜音声記録・要点整理</title>
+<title>VoiceMinutes v2.13｜音声記録・要点整理</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 
@@ -21465,8 +21465,8 @@ function safeJsonParse(str, fallback){
   if(str===null || str===undefined) return fallback; // JSON.parse(null)は例外にならず"null"→nullを返すため要注意
   try{ const v = JSON.parse(str); return v===undefined?fallback:v; }catch(e){ return fallback; }
 }
-function getRules(){return safeJsonParse(localStorage.getItem('vm_rules'), []);}
-function saveRules(r){localStorage.setItem('vm_rules',JSON.stringify(r));}
+function getRules(){return safeJsonParse(localStorage.getItem(vmScopedKey('vm_rules')), []);}
+function saveRules(r){localStorage.setItem(vmScopedKey('vm_rules'),JSON.stringify(r));}
 function renderRuleList(){const rules=getRules(),el=document.getElementById('replaceRuleList');if(!rules.length){el.innerHTML='<div style="font-size:12px;color:var(--text3);text-align:center;padding:10px">ルールが登録されていません</div>';return;}el.innerHTML=rules.map((r,i)=>'<div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;"><span style="flex:1;font-size:13px;color:var(--text);font-family:\'DM Mono\',monospace">'+escHtml(r.from||'（空白）')+'</span><span style="color:var(--text3);font-size:16px">→</span><span style="flex:1;font-size:13px;color:var(--accent2);font-family:\'DM Mono\',monospace">'+escHtml(r.to||'（削除）')+'</span><button class="btn-sm" onclick="deleteRule('+i+')" style="padding:3px 8px;color:var(--red);border-color:var(--red)">✕</button></div>').join('');}
 function addRule(){const from=document.getElementById('ruleFrom').value.trim(),to=document.getElementById('ruleTo').value.trim();if(!from){showToast('err','置換前の文字を入力してください');return;}const rules=getRules();if(rules.find(r=>r.from===from)){showToast('err','「'+from+'」はすでに登録されています');return;}rules.push({from,to});saveRules(rules);document.getElementById('ruleFrom').value='';document.getElementById('ruleTo').value='';renderRuleList();showToast('ok','✅「'+from+'」→「'+(to||'（削除）')+'」を登録しました');}
 function addPreset(from,to){const rules=getRules();if(rules.find(r=>r.from===from)){showToast('err','「'+from+'」はすでに登録済みです');return;}rules.push({from,to});saveRules(rules);renderRuleList();showToast('ok','✅「'+from+'」→「'+(to||'（削除）')+'」を登録しました');}
@@ -21475,8 +21475,8 @@ function deleteRule(i){const rules=getRules();rules.splice(i,1);saveRules(rules)
 let toastTimer=null;
 function showToast(type,msg){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+type+' show';clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),type==='err'?6000:3500);}
 
-function saveVocab(){localStorage.setItem('vm_vocab', document.getElementById('vocabInput').value);updateVocabCharCount();}
-function loadVocab(){const el=document.getElementById('vocabInput'); if(el) el.value = localStorage.getItem('vm_vocab')||'';updateVocabCharCount();}
+function saveVocab(){localStorage.setItem(vmScopedKey('vm_vocab'), document.getElementById('vocabInput').value);updateVocabCharCount();}
+function loadVocab(){const el=document.getElementById('vocabInput'); if(el) el.value = localStorage.getItem(vmScopedKey('vm_vocab'))||'';updateVocabCharCount();}
 // Whisperのprompt欄はトークン数に上限があり（目安 約224トークン）、
 // 詰め込みすぎると後半の単語が効かなくなる。文字数で簡易的に目安表示する。
 // ※保育の基本用語（HOIKU_WHISPER_HINT）が自動で先頭に入るため、職員入力分の目安は少なめにしている。
@@ -21525,7 +21525,7 @@ let ROSTER_GARDEN = null;             // {code,key,name}
 function vmGarden(){
   try{ return (typeof gardenFromUrl==='function') ? gardenFromUrl() : null; }catch(e){ return null; }
 }
-// 会話記録・自動保存を園ごとに分ける（v2.12 追加）
+// 会話記録・自動保存（v2.12）、用語登録・置換ルール（v2.13）を園ごとに分ける
 // 園が分かるときは「vm_history__園キー」に保存する。園が分からないとき（URLを直接開いたとき）は従来の保存先のまま。
 // v2.11以前の記録は従来の保存先に残り、園ごとの画面には出ない（消してはいない）。
 function vmScopedKey(base){
@@ -21614,7 +21614,7 @@ function getRosterText(){
 
 // 職員が「用語登録」欄に入れた語（カンマ・読点区切り）を配列で返す
 function getUserVocabWords(){
-  return (localStorage.getItem('vm_vocab')||'').split(/[、,，\s]+/).map(s=>s.trim()).filter(Boolean);
+  return (localStorage.getItem(vmScopedKey('vm_vocab'))||'').split(/[、,，\s]+/).map(s=>s.trim()).filter(Boolean);
 }
 function updateVocabCharCount(){
   const el=document.getElementById('vocabInput'), out=document.getElementById('vocabCharCount');
