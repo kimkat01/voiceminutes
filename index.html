@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VoiceMinutes v2.11｜音声記録・要点整理</title>
+<title>VoiceMinutes v2.12｜音声記録・要点整理</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 
@@ -21188,7 +21188,7 @@ async function processWhisperFile(file){
 // タブがメモリ不足等で落ちても、次に開いたときに続きを失わずに済む。
 function autosaveProgress(doneChunks, totalChunks){
   try{
-    localStorage.setItem('vm_autosave', JSON.stringify({
+    localStorage.setItem(vmScopedKey('vm_autosave'), JSON.stringify({
       utterances: utterances,
       scene: currentScene,
       doneChunks: doneChunks,
@@ -21197,10 +21197,10 @@ function autosaveProgress(doneChunks, totalChunks){
     }));
   }catch(e){ /* 容量超過等は無視（自動保存は補助機能のため） */ }
 }
-function clearAutosave(){ try{ localStorage.removeItem('vm_autosave'); }catch(e){} }
+function clearAutosave(){ try{ localStorage.removeItem(vmScopedKey('vm_autosave')); }catch(e){} }
 function restoreAutosaveIfAny(){
   let saved;
-  try{ saved = JSON.parse(localStorage.getItem('vm_autosave')||'null'); }catch(e){ saved = null; }
+  try{ saved = JSON.parse(localStorage.getItem(vmScopedKey('vm_autosave'))||'null'); }catch(e){ saved = null; }
   if(!saved || !saved.utterances || !saved.utterances.length) return;
   const ageMin = Math.round((Date.now() - (saved.savedAt||0)) / 60000);
   const msg = '前回、文字起こしが' + saved.doneChunks + '/' + saved.totalChunks + 'チャンク（約' + ageMin + '分前）まで進んだ状態で中断したデータが見つかりました。復元しますか？';
@@ -21254,16 +21254,16 @@ function renderSummary(r){
   document.getElementById('summaryBody').innerHTML=html||'<div class="empty-state"><div class="empty-text">要点が見つかりませんでした</div></div>';
 }
 function saveHistory(text,result){
-  let hist=safeJsonParse(localStorage.getItem('vm_history'), []);
+  let hist=safeJsonParse(localStorage.getItem(vmScopedKey('vm_history')), []);
   const dateStr=new Date().toLocaleDateString('ja-JP',{month:'long',day:'numeric'});
   const title=SCENE_LABELS[currentScene]+' '+dateStr;
   hist.unshift({id:Date.now(),date:new Date().toLocaleString('ja-JP'),scene:currentScene,sceneLabel:SCENE_LABELS[currentScene],transcript:text,utterances,summary:result,title:title});
   if(hist.length>50)hist=hist.slice(0,50);
-  localStorage.setItem('vm_history',JSON.stringify(hist));
+  localStorage.setItem(vmScopedKey('vm_history'),JSON.stringify(hist));
   renderHistory();
 }
 function renderHistory(){
-  const hist=safeJsonParse(localStorage.getItem('vm_history'), []);
+  const hist=safeJsonParse(localStorage.getItem(vmScopedKey('vm_history')), []);
   const list=document.getElementById('historyList');
   if(!hist.length){list.innerHTML='<div class="empty-history">録音・要点整理した記録が<br>ここに表示されます</div>';return;}
   list.innerHTML=hist.map(h=>
@@ -21282,14 +21282,14 @@ function renderHistory(){
 
 function deleteHistory(id){
   if(!confirm('この記録を削除しますか？')) return;
-  let hist=safeJsonParse(localStorage.getItem('vm_history'), []);
+  let hist=safeJsonParse(localStorage.getItem(vmScopedKey('vm_history')), []);
   hist=hist.filter(h=>h.id!==id);
-  localStorage.setItem('vm_history',JSON.stringify(hist));
+  localStorage.setItem(vmScopedKey('vm_history'),JSON.stringify(hist));
   renderHistory();
   showToast('ok','🗑 記録を削除しました');
 }
 function loadHistory(id){
-  const hist=safeJsonParse(localStorage.getItem('vm_history'), []);
+  const hist=safeJsonParse(localStorage.getItem(vmScopedKey('vm_history')), []);
   const h=hist.find(x=>x.id===id);
   if(!h)return;
   utterances=(h.utterances&&h.utterances.length)?h.utterances:[{speaker:'a',label:'話者A',icon:'A',side:'right',text:h.transcript,ts:0}];
@@ -21433,7 +21433,7 @@ function confirmSave() {
   showToast('ok', '✅ 「' + title + '」を保存しました');
 }
 function saveHistoryWithTitle(title) {
-  let hist = safeJsonParse(localStorage.getItem('vm_history'), []);
+  let hist = safeJsonParse(localStorage.getItem(vmScopedKey('vm_history')), []);
   // 要点整理結果があれば含める
   const summaryBody = document.getElementById('summaryBody');
   const hasSummary = summaryBody && summaryBody.querySelector('.summary-card');
@@ -21450,7 +21450,7 @@ function saveHistoryWithTitle(title) {
     title: title
   });
   if (hist.length > 50) hist = hist.slice(0, 50);
-  localStorage.setItem('vm_history', JSON.stringify(hist));
+  localStorage.setItem(vmScopedKey('vm_history'), JSON.stringify(hist));
   renderHistory();
 }
 
@@ -21524,6 +21524,13 @@ let ROSTER_GARDEN = null;             // {code,key,name}
 
 function vmGarden(){
   try{ return (typeof gardenFromUrl==='function') ? gardenFromUrl() : null; }catch(e){ return null; }
+}
+// 会話記録・自動保存を園ごとに分ける（v2.12 追加）
+// 園が分かるときは「vm_history__園キー」に保存する。園が分からないとき（URLを直接開いたとき）は従来の保存先のまま。
+// v2.11以前の記録は従来の保存先に残り、園ごとの画面には出ない（消してはいない）。
+function vmScopedKey(base){
+  const g=vmGarden();
+  return g && g.key ? base+'__'+g.key : base;
 }
 // 通行証を探す：①ポータルからの引き継ぎメモ（このタブ用に sessionStorage へ移す）②このタブで受け取り済み ③ポータルの30日ログイン
 function readVmAuth(g){
