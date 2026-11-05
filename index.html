@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VoiceMinutes v2.17｜音声記録・要点整理</title>
+<title>VoiceMinutes v2.18｜音声記録・要点整理</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 
@@ -336,7 +336,9 @@
   /* エクスポート */
   .export-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1.5px solid var(--border); }
   .btn-export-minutes { flex: 1 0 100%; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 4px; font-family: inherit; }
-  .btn-export-minutes.is-ready { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-export.btn-export-minutes { background: #D6246E; border-color: #D6246E; color: #fff; font-family: inherit; }
+  .btn-export.btn-export-minutes:hover { background: #B81A5B; border-color: #B81A5B; color: #fff; }
+  .btn-export.btn-export-minutes.is-ready { background: #A81653; border-color: #A81653; color: #fff; }
   .btn-export-minutes:disabled { opacity: 0.7; cursor: wait; transform: none; }
   .export-label { font-size: 10px; color: var(--text3); font-weight: 700; flex-shrink: 0; letter-spacing: 0.3px; }
   .btn-export { flex: 1; padding: 6px 4px; border-radius: 20px; border: 1.5px solid var(--border2); background: var(--surface2); color: var(--text2); font-size: 11px; font-weight: 700; cursor: pointer; font-family: 'DM Mono', monospace; transition: all 0.13s; text-align: center; }
