@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VoiceMinutes v2.19｜音声記録・要点整理</title>
+<title>VoiceMinutes v2.20｜音声記録・要点整理</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 
@@ -21235,7 +21235,7 @@ function restoreWhisperDropZone(){
   z.ondrop=function(e){e.preventDefault();z.classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f)processWhisperFile(f);};
 }
 
-function clearTranscript(){utterances=[];fullTranscript='';currentSpeakerIdx=0;lastSummaryTranscript=null;renderBubbles();updateCharCount();document.getElementById('timerDisplay').textContent='00:00';document.getElementById('interimBar').textContent='';clearAutosave();checkSummaryStale();
+function clearTranscript(){utterances=[];fullTranscript='';currentSpeakerIdx=0;lastSummaryTranscript=null;renderBubbles();updateCharCount();const timerEl=document.getElementById('timerDisplay');if(timerEl)timerEl.textContent='00:00';document.getElementById('interimBar').textContent='';clearAutosave();checkSummaryStale();pendingMinutes=null;setMinutesButton('idle');
   const btn=document.getElementById('btnSaveRecord');if(btn)btn.classList.remove('visible');document.getElementById('summaryBody').innerHTML='<div class="empty-state"><div class="empty-icon">✨</div><div class="empty-text">文字起こし後に<br>「AI要点整理」を実行すると<br>決定事項・TODOが<br>自動でまとまります</div></div>';}
 function copyTranscript(){const text=utterances.map(u=>'['+fmtSec(u.ts)+'] 【'+u.label+'】'+u.text).join('\n');if(!text.trim()){showToast('err','コピーする文字がありません');return;}navigator.clipboard.writeText(text).then(()=>showToast('ok','📋 クリップボードにコピーしました'));}
 function applyReplace(){if(!utterances.length){showToast('err','発言がありません');return;}const rules=getRules();if(!rules.length){openSpeakerModal();showToast('err','置換ルールが登録されていません');return;}let count=0;utterances=utterances.map(u=>{let t=u.text;for(const r of rules){const re=new RegExp(r.from.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g');const m=t.match(re);if(m)count+=m.length;t=t.replace(re,r.to);}return{...u,text:t};});renderBubbles();updateTranscriptUI();showToast('ok','✅ '+count+' 箇所を置換しました');}
