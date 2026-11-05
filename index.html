@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VoiceMinutes v2.13｜音声記録・要点整理</title>
+<title>VoiceMinutes v2.14｜音声記録・要点整理</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 
@@ -21525,6 +21525,16 @@ let ROSTER_GARDEN = null;             // {code,key,name}
 function vmGarden(){
   try{ return (typeof gardenFromUrl==='function') ? gardenFromUrl() : null; }catch(e){ return null; }
 }
+// v2.11以前の全園共通の会話記録・自動保存を、ブラウザごとに1回だけ削除する（v2.14 追加）
+// 園ごとの記録（vm_history__園キー）と用語登録・置換ルールは消さない。
+function clearLegacyRecordsOnce(){
+  try{
+    if(localStorage.getItem('vm_legacy_records_cleared')) return;
+    localStorage.removeItem('vm_history');
+    localStorage.removeItem('vm_autosave');
+    localStorage.setItem('vm_legacy_records_cleared','1');
+  }catch(e){}
+}
 // 会話記録・自動保存（v2.12）、用語登録・置換ルール（v2.13）を園ごとに分ける
 // 園が分かるときは「vm_history__園キー」に保存する。園が分からないとき（URLを直接開いたとき）は従来の保存先のまま。
 // v2.11以前の記録は従来の保存先に残り、園ごとの画面には出ない（消してはいない）。
@@ -22071,6 +22081,7 @@ document.addEventListener('click',function(e){
   if(wrap && panel && panel.classList.contains('open') && !wrap.contains(e.target)) panel.classList.remove('open');
 });
 
+clearLegacyRecordsOnce();
 renderHistory();
 restoreAutosaveIfAny(); // 前回タブが落ちた等で自動保存が残っていれば復元を促す
 
