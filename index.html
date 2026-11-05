@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VoiceMinutes v2.10｜音声記録・要点整理</title>
+<title>VoiceMinutes v2.11｜音声記録・要点整理</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 
@@ -21593,7 +21593,8 @@ function getRosterGivenNames(){
 // 施設コードごとに書く。年度替わりでクラス名が変わったらここを直す。
 // ポータルの「文字起こし」から開いたとき（URLに園が付くとき）だけ使う。
 const GARDEN_CLASSES = {
-  S10: ['ほし組','そら組','つき組','にじ組','ひかり組']   // しおどめ保育園つくば
+  S10: ['ほし組','そら組','つき組','にじ組','ひかり組'],   // しおどめ保育園つくば
+  Y01: ['さくらんぼ組','いちご組','みかん組','もも組','りんご組','ぶどう組']   // 八潮しおどめ保育園
 };
 function getGardenClasses(){
   const g=vmGarden();
